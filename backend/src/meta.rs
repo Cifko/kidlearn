@@ -2,16 +2,16 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{config::Config, error::AppError};
 
-/// Client for the Meta Llama API (OpenAI-compatible `/chat/completions`).
+/// Client for the Meta Model API at `api.meta.ai` (OpenAI-compatible `/chat/completions`).
 #[derive(Clone)]
-pub struct LlamaClient {
+pub struct MetaClient {
     base_url: String,
     api_key: String,
     model: String,
     http: reqwest::Client,
 }
 
-impl LlamaClient {
+impl MetaClient {
     /// Returns `None` when no API key is configured, so the server can run
     /// (without generation) before the key is installed.
     pub fn from_config(config: &Config) -> Option<Self> {
@@ -162,6 +162,6 @@ mod tests {
     fn client_is_none_without_api_key() {
         let config = Config::for_tests();
         assert!(config.meta_api_key.is_none());
-        assert!(LlamaClient::from_config(&config).is_none());
+        assert!(MetaClient::from_config(&config).is_none());
     }
 }

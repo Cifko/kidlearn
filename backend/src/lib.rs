@@ -4,7 +4,7 @@ pub mod config;
 pub mod db;
 pub mod error;
 pub mod generate;
-pub mod llama;
+pub mod meta;
 pub mod models;
 pub mod prompts;
 

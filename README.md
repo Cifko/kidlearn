@@ -12,7 +12,7 @@ Duolingo-style multiple-choice questions, with pictures.
 2. They browse public categories, or create their own (public or private) by
    describing the subject in their own language (e.g. a Slovak kid types
    "prvouka").
-3. The backend asks the Meta Llama API for N subcategories (default 20,
+3. The backend asks the Meta Model API (`api.meta.ai`) for N subcategories (default 20,
    configurable) in pedagogical order, then generates 5–10 questions per
    subcategory. Questions reference image assets; SVGs are generated on demand.
 4. The kid opens a category, sees the ordered subcategories, and learns
@@ -20,7 +20,7 @@ Duolingo-style multiple-choice questions, with pictures.
 
 ## Layout
 
-- `backend/` — Rust (Axum) API: auth, categories, Llama generation, SQLite.
+- `backend/` — Rust (Axum) API: auth, categories, Meta AI generation, SQLite.
 - `app/` — Expo (React Native + Web) client from one codebase: web app and
   native mobile apps.
 - `backend/prompts/` — LLM prompt templates (planner, questions, SVG art).
@@ -53,9 +53,9 @@ App (phone): install Expo Go, run `npx expo start`, scan the QR code.
 | --------------- | ------------------------------------ | -------------------------------- |
 | `DATABASE_URL`  | `sqlite://kidlearn.db`               | SQLite database                  |
 | `JWT_SECRET`    | `dev-secret-change-me`               | Token signing (dev default)      |
-| `META_API_BASE` | `https://api.llama.com/compat/v1`    | Llama OpenAI-compatible endpoint |
+| `META_API_BASE` | `https://api.meta.ai/v1`             | Meta Model API endpoint          |
 | `META_API_KEY`  | _(none)_                             | Enables AI generation            |
-| `META_MODEL`    | `Llama-4-Scout-17B-16E-Instruct`     | Generation model                 |
+| `META_MODEL`    | `muse-spark-1.3`                     | Generation model                 |
 
 ## Roadmap
 

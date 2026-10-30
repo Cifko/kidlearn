@@ -13,7 +13,7 @@ use crate::{
     auth::AuthUser,
     categories::{category_detail, CategoryDetail},
     error::AppError,
-    llama::LlamaClient,
+    meta::MetaClient,
     models::Category,
     prompts, AppState,
 };
@@ -92,7 +92,7 @@ async fn generate_category(
     Path(id): Path<i64>,
     body: Option<Json<GenerateRequest>>,
 ) -> Result<Json<CategoryDetail>, AppError> {
-    let client = LlamaClient::from_config(&state.config).ok_or_else(|| {
+    let client = MetaClient::from_config(&state.config).ok_or_else(|| {
         AppError::ServiceUnavailable(
             "META_API_KEY is not configured; generation is disabled".to_string(),
         )
@@ -156,7 +156,7 @@ async fn generate_category(
 
 async fn run_generation(
     pool: &sqlx::SqlitePool,
-    client: &LlamaClient,
+    client: &MetaClient,
     category: &Category,
     count: i64,
     min_questions: i64,
@@ -312,7 +312,7 @@ async fn asset_svg(
         return Ok(svg_response(svg));
     }
 
-    let client = LlamaClient::from_config(&state.config).ok_or_else(|| {
+    let client = MetaClient::from_config(&state.config).ok_or_else(|| {
         AppError::ServiceUnavailable(
             "META_API_KEY is not configured; image generation is disabled".to_string(),
         )

@@ -10,7 +10,7 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Self {
-        let meta_api_base = env_or("META_API_BASE", "https://api.llama.com/compat/v1");
+        let meta_api_base = env_or("META_API_BASE", "https://api.meta.ai/v1");
         Self {
             port: env_u16("PORT", 3000),
             database_url: env_or("DATABASE_URL", "sqlite://kidlearn.db?mode=rwc"),
@@ -19,7 +19,7 @@ impl Config {
             meta_api_key: std::env::var("META_API_KEY")
                 .ok()
                 .filter(|v| !v.trim().is_empty()),
-            meta_model: env_or("META_MODEL", "Llama-4-Scout-17B-16E-Instruct"),
+            meta_model: env_or("META_MODEL", "muse-spark-1.3"),
         }
     }
 
