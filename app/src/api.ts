@@ -125,6 +125,11 @@ async function request<T>(
 
 export const api = {
   devLogin: () => request<{ token: string; user: User }>('/auth/dev-login', { method: 'POST' }),
+  googleLogin: (idToken: string) =>
+    request<{ token: string; user: User }>('/auth/google', {
+      method: 'POST',
+      body: { id_token: idToken },
+    }),
   me: (token: string) => request<User>('/me', { token }),
   listCategories: (token: string, q?: string) =>
     request<CategorySummary[]>(

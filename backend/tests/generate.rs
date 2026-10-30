@@ -9,10 +9,7 @@ use tower::ServiceExt;
 async fn test_state() -> (sqlx::SqlitePool, axum::Router) {
     let config = Config::for_tests();
     let pool = db::init_pool(&config.database_url).await.unwrap();
-    let app = create_app(AppState {
-        db: pool.clone(),
-        config,
-    });
+    let app = create_app(AppState::new(pool.clone(), config));
     (pool, app)
 }
 
@@ -215,10 +212,7 @@ async fn generate_runs_in_background_and_reports_failure() {
     config.meta_api_key = Some("test-key".to_string());
     config.meta_api_base = "http://127.0.0.1:1".to_string();
     let pool = db::init_pool(&config.database_url).await.unwrap();
-    let app = create_app(AppState {
-        db: pool.clone(),
-        config,
-    });
+    let app = create_app(AppState::new(pool.clone(), config));
     let token = login_token(&app).await;
     let id = create_category_id(&app, &token).await;
 

@@ -56,9 +56,22 @@ App (phone): install Expo Go, run `npx expo start`, scan the QR code.
 | `META_API_BASE` | `https://api.meta.ai/v1`             | Meta Model API endpoint          |
 | `META_API_KEY`  | _(none)_                             | Enables AI generation            |
 | `META_MODEL`    | `muse-spark-1.3`                     | Generation model                 |
+| `GOOGLE_CLIENT_ID` | _(none)_                          | Enables Google login (web client ID) |
+
+## Google login setup
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create OAuth
+   credentials of type **Web application**.
+2. Add the app's address to **Authorized redirect URIs**
+   (e.g. `http://localhost:8081` for local web dev). The app builds its
+   redirect with `AuthSession.makeRedirectUri()`.
+3. Put the same client ID in `backend/.env` (`GOOGLE_CLIENT_ID=…`) and in
+   `app/.env` (`EXPO_PUBLIC_GOOGLE_CLIENT_ID=…`), then restart both.
+   With no client ID configured, the Google button stays disabled and the
+   dev login keeps working. Native apps need a dev build plus their own
+   iOS/Android client IDs (not wired yet).
 
 ## Roadmap
 
-- Google OAuth (replace dev login in production)
 - Durable job queue for generation (in-process tasks are lost on restart)
 - More UI languages (English + Slovak first)

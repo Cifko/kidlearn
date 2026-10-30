@@ -9,10 +9,7 @@ use tower::ServiceExt;
 async fn test_state() -> (sqlx::SqlitePool, axum::Router) {
     let config = Config::for_tests();
     let pool = db::init_pool(&config.database_url).await.unwrap();
-    let app = create_app(AppState {
-        db: pool.clone(),
-        config,
-    });
+    let app = create_app(AppState::new(pool.clone(), config));
     (pool, app)
 }
 

@@ -49,10 +49,7 @@ async fn live_generate_and_render_svg() {
         return;
     };
     let pool = db::init_pool(&config.database_url).await.unwrap();
-    let app = create_app(AppState {
-        db: pool.clone(),
-        config,
-    });
+    let app = create_app(AppState::new(pool.clone(), config));
     let token = login_token(&app).await;
 
     let response = app

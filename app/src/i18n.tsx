@@ -6,6 +6,7 @@ const strings = {
   en: {
     tagline: 'Learn anything, one small step at a time.',
     devLogin: 'Log in as Dev',
+    googleLogin: 'Continue with Google',
     googleSoon: 'Google login (coming soon)',
     logout: 'Log out',
     categories: 'Categories',
@@ -50,6 +51,7 @@ const strings = {
   sk: {
     tagline: 'Nauč sa čokoľvek, krok za krokom.',
     devLogin: 'Prihlásiť ako vývojár',
+    googleLogin: 'Pokračovať cez Google',
     googleSoon: 'Prihlásenie cez Google (čoskoro)',
     logout: 'Odhlásiť',
     categories: 'Okruhy',

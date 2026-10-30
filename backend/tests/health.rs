@@ -8,7 +8,7 @@ use tower::ServiceExt;
 async fn test_app() -> axum::Router {
     let config = Config::for_tests();
     let pool = db::init_pool(&config.database_url).await.unwrap();
-    create_app(AppState { db: pool, config })
+    create_app(AppState::new(pool, config))
 }
 
 #[tokio::test]

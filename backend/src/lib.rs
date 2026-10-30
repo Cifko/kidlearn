@@ -17,6 +17,17 @@ use tower_http::cors::CorsLayer;
 pub struct AppState {
     pub db: sqlx::SqlitePool,
     pub config: config::Config,
+    pub http: reqwest::Client,
+}
+
+impl AppState {
+    pub fn new(db: sqlx::SqlitePool, config: config::Config) -> Self {
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("HTTP client builds");
+        Self { db, config, http }
+    }
 }
 
 pub fn create_app(state: AppState) -> Router {

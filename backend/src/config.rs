@@ -6,6 +6,8 @@ pub struct Config {
     pub meta_api_base: String,
     pub meta_api_key: Option<String>,
     pub meta_model: String,
+    pub google_client_id: Option<String>,
+    pub google_tokeninfo_url: String,
 }
 
 impl Config {
@@ -20,6 +22,13 @@ impl Config {
                 .ok()
                 .filter(|v| !v.trim().is_empty()),
             meta_model: env_or("META_MODEL", "muse-spark-1.3"),
+            google_client_id: std::env::var("GOOGLE_CLIENT_ID")
+                .ok()
+                .filter(|v| !v.trim().is_empty()),
+            google_tokeninfo_url: env_or(
+                "GOOGLE_TOKENINFO_URL",
+                "https://oauth2.googleapis.com/tokeninfo",
+            ),
         }
     }
 
@@ -32,6 +41,8 @@ impl Config {
             meta_api_base: "http://localhost:1".to_string(),
             meta_api_key: None,
             meta_model: "test-model".to_string(),
+            google_client_id: None,
+            google_tokeninfo_url: "http://localhost:1".to_string(),
         }
     }
 }

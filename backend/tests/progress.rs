@@ -19,10 +19,7 @@ struct Seed {
 async fn seed() -> Seed {
     let config = Config::for_tests();
     let pool = db::init_pool(&config.database_url).await.unwrap();
-    let app = create_app(AppState {
-        db: pool.clone(),
-        config,
-    });
+    let app = create_app(AppState::new(pool.clone(), config));
 
     let response = app
         .clone()

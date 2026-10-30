@@ -7,6 +7,7 @@ const SCHEMA: &[&str] = &[
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
+        google_sub TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )",
     "CREATE TABLE IF NOT EXISTS categories (
@@ -60,6 +61,10 @@ const SCHEMA: &[&str] = &[
     )",
 ];
 
+/// ALTERs for databases created before the matching column existed.
+/// Each runs on boot; already-applied ones are ignored.
+const MIGRATIONS: &[&str] = &["ALTER TABLE users ADD COLUMN google_sub TEXT"];
+
 pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
     let mut options = SqlitePoolOptions::new();
     if database_url.contains(":memory:") {
@@ -69,6 +74,13 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
     let pool = options.connect(database_url).await?;
     for statement in SCHEMA {
         sqlx::query(statement).execute(&pool).await?;
+    }
+    for migration in MIGRATIONS {
+        match sqlx::query(migration).execute(&pool).await {
+            Ok(_) => {}
+            Err(err) if err.to_string().contains("duplicate column") => {}
+            Err(err) => return Err(err),
+        }
     }
     Ok(pool)
 }
