@@ -14,9 +14,7 @@ use tower::ServiceExt;
 
 fn live_config() -> Option<Config> {
     let from_env = Config::from_env();
-    if from_env.meta_api_key.is_none() {
-        return None;
-    }
+    from_env.meta_api_key.as_ref()?;
     Some(Config {
         database_url: "sqlite::memory:".to_string(),
         meta_api_base: from_env.meta_api_base,

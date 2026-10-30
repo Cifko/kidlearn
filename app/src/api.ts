@@ -40,6 +40,52 @@ export interface CreateCategoryInput {
   subcategory_count?: number;
 }
 
+export interface LessonOption {
+  asset_key: string;
+  svg_url: string;
+}
+
+export interface LessonQuestion {
+  id: number;
+  position: number;
+  qid: string;
+  text: string;
+  qtype: string;
+  options: LessonOption[];
+}
+
+export interface LessonSub {
+  id: number;
+  category_id: number;
+  position: number;
+  title: string;
+  summary: string;
+}
+
+export interface Lesson {
+  subcategory: LessonSub;
+  questions: LessonQuestion[];
+}
+
+export interface AnswerResult {
+  correct: boolean;
+  correct_asset_key: string;
+}
+
+export interface SubProgress {
+  subcategory_id: number;
+  position: number;
+  total: number;
+  answered: number;
+  correct: number;
+  unlocked: boolean;
+}
+
+export interface CategoryProgress {
+  category_id: number;
+  subcategories: SubProgress[];
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -86,4 +132,23 @@ export const api = {
     }),
   deleteCategory: (token: string, id: number) =>
     request<void>(`/categories/${id}`, { method: 'DELETE', token }),
+  lesson: (token: string, subId: number) =>
+    request<Lesson>(`/subcategories/${subId}/lesson`, { token }),
+  answer: (token: string, subId: number, question_id: number, asset_key: string) =>
+    request<AnswerResult>(`/subcategories/${subId}/answer`, {
+      method: 'POST',
+      token,
+      body: { question_id, asset_key },
+    }),
+  categoryProgress: (token: string, id: number) =>
+    request<CategoryProgress>(`/categories/${id}/progress`, { token }),
+  assetSvg: async (token: string, path: string): Promise<string> => {
+    const response = await fetch(`${API_URL}${path}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new ApiError(response.status, `Image failed (${response.status})`);
+    }
+    return response.text();
+  },
 };

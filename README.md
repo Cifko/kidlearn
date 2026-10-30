@@ -61,6 +61,6 @@ App (phone): install Expo Go, run `npx expo start`, scan the QR code.
 
 - Google OAuth (replace dev login in production)
 - Background generation jobs with live progress
-- Duolingo-style lesson runner + progress/XP
+- XP, streaks and hearts for the lesson runner
 - Public category gallery with search
 - More UI languages (English + Slovak first)

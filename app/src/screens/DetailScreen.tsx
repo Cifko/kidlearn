@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { api, ApiError, CategoryDetail } from '../api';
+import { api, ApiError, CategoryDetail, SubProgress } from '../api';
 import { useLang } from '../i18n';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
@@ -10,14 +10,17 @@ export function DetailScreen({
   categoryId,
   onBack,
   onDeleted,
+  onLearn,
 }: {
   token: string;
   categoryId: number;
   onBack: () => void;
   onDeleted: () => void;
+  onLearn: (subId: number) => void;
 }) {
   const { t } = useLang();
   const [detail, setDetail] = useState<CategoryDetail | null>(null);
+  const [progress, setProgress] = useState<Record<number, SubProgress>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +29,12 @@ export function DetailScreen({
     setLoading(true);
     setError(null);
     try {
-      setDetail(await api.getCategory(token, categoryId));
+      const [data, prog] = await Promise.all([
+        api.getCategory(token, categoryId),
+        api.categoryProgress(token, categoryId),
+      ]);
+      setDetail(data);
+      setProgress(Object.fromEntries(prog.subcategories.map((s) => [s.subcategory_id, s])));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load');
     } finally {
@@ -46,6 +54,8 @@ export function DetailScreen({
     setError(null);
     try {
       setDetail(await api.generateCategory(token, categoryId, detail.subcategory_count));
+      const prog = await api.categoryProgress(token, categoryId);
+      setProgress(Object.fromEntries(prog.subcategories.map((s) => [s.subcategory_id, s])));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Generation failed');
     } finally {
@@ -94,21 +104,37 @@ export function DetailScreen({
             <Text style={styles.statusGenerating}>{t('generating')}</Text>
           )}
           {detail.status === 'failed' && <Text style={styles.statusFailed}>{t('failed')}</Text>}
-          <View style={styles.learnButton}>
-            <ChunkyButton title={t('learn')} onPress={() => {}} color="gray" disabled />
+          <View style={styles.list}>
+            {detail.subcategories.map((sub) => {
+              const prog = progress[sub.id];
+              const locked = prog ? !prog.unlocked : false;
+              const done =
+                prog !== undefined && prog.total > 0 && prog.answered >= prog.total;
+              return (
+                <TouchableOpacity
+                  key={sub.id}
+                  style={[styles.subRow, locked && styles.subRowLocked]}
+                  disabled={locked}
+                  onPress={() => onLearn(sub.id)}
+                >
+                  <Text style={[styles.subPosition, locked && styles.subPositionLocked]}>
+                    {sub.position}
+                  </Text>
+                  <View style={styles.subBody}>
+                    <Text style={styles.subTitle}>{sub.title}</Text>
+                    {sub.summary.length > 0 && <Text style={styles.subSummary}>{sub.summary}</Text>}
+                    <Text style={styles.subCount}>
+                      {locked
+                        ? t('locked')
+                        : prog
+                          ? `${prog.answered}/${prog.total} ${t('questions')}${done ? ` · ${t('done')}` : ''}`
+                          : `${sub.question_count} ${t('questions')}`}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-          {detail.subcategories.map((sub) => (
-            <View key={sub.id} style={styles.subRow}>
-              <Text style={styles.subPosition}>{sub.position}</Text>
-              <View style={styles.subBody}>
-                <Text style={styles.subTitle}>{sub.title}</Text>
-                {sub.summary.length > 0 && <Text style={styles.subSummary}>{sub.summary}</Text>}
-                <Text style={styles.subCount}>
-                  {sub.question_count} {t('questions')}
-                </Text>
-              </View>
-            </View>
-          ))}
           {detail.mine && (
             <View style={styles.ownerRow}>
               <View style={styles.ownerButton}>
@@ -171,8 +197,8 @@ const styles = StyleSheet.create({
     color: colors.red,
     marginTop: 12,
   },
-  learnButton: {
-    marginVertical: 20,
+  list: {
+    marginTop: 20,
   },
   subRow: {
     flexDirection: 'row',
@@ -183,6 +209,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 14,
     marginBottom: 10,
+  },
+  subRowLocked: {
+    opacity: 0.55,
   },
   subPosition: {
     width: 32,
@@ -195,6 +224,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 32,
     overflow: 'hidden',
+  },
+  subPositionLocked: {
+    backgroundColor: colors.grayDark,
   },
   subBody: {
     flex: 1,

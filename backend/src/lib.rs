@@ -6,6 +6,7 @@ pub mod error;
 pub mod generate;
 pub mod meta;
 pub mod models;
+pub mod progress;
 pub mod prompts;
 
 use axum::{routing::get, Json, Router};
@@ -24,6 +25,7 @@ pub fn create_app(state: AppState) -> Router {
         .merge(auth::router())
         .merge(categories::router())
         .merge(generate::router())
+        .merge(progress::router())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }

@@ -6,10 +6,16 @@ import { LangProvider, useLang } from './src/i18n';
 import { CreateScreen } from './src/screens/CreateScreen';
 import { DetailScreen } from './src/screens/DetailScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { LearnScreen } from './src/screens/LearnScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { Screen } from './src/ui';
 
-type Route = { name: 'login' } | { name: 'home' } | { name: 'create' } | { name: 'detail'; id: number };
+type Route =
+  | { name: 'login' }
+  | { name: 'home' }
+  | { name: 'create' }
+  | { name: 'detail'; id: number }
+  | { name: 'learn'; categoryId: number; subId: number };
 
 function Shell() {
   const { t } = useLang();
@@ -71,6 +77,16 @@ function Shell() {
     );
   }
 
+  if (route.name === 'learn') {
+    return (
+      <LearnScreen
+        token={token}
+        subId={route.subId}
+        onExit={() => setRoute({ name: 'detail', id: route.categoryId })}
+      />
+    );
+  }
+
   if (route.name === 'detail') {
     return (
       <DetailScreen
@@ -78,6 +94,7 @@ function Shell() {
         categoryId={route.id}
         onBack={() => setRoute({ name: 'home' })}
         onDeleted={() => setRoute({ name: 'home' })}
+        onLearn={(subId) => setRoute({ name: 'learn', categoryId: route.id, subId })}
       />
     );
   }
