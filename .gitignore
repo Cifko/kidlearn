@@ -1,0 +1,30 @@
+# Rust
+target/
+Cargo.lock
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.mobileprovision
+*.orig.*
+
+# Env / secrets
+.env
+.env.local
+
+# SQLite
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store

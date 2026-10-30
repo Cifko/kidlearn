@@ -1,0 +1,36 @@
+You are an SVG image generator. Your task is to draw EXACTLY ONE image based on the specification below.
+Do not invent anything. Do not add anything. Do not change the specification.
+
+SPECIFICATION:
+{asset_json}
+
+MANDATORY STYLE FOR ALL IMAGES:
+- Output format: raw SVG only
+- viewBox="0 0 200 200"
+- Transparent background
+- stroke="#2d3436"
+- stroke-width="5"
+- stroke-linejoin="round"
+- Flat bright colors
+- No text
+- No shadow
+- No gradient unless explicitly specified
+- No additional objects, decorations, or background elements
+- Single object centered at 100,100
+- Object size approx. 140x160px
+
+SHAPE-SPECIFIC RULES:
+- cylinder: NEVER draw a separate bottom ellipse. The bottom edge must be only an arc that is part of the body path. Draw the body first, then draw the top ellipse on top of it.
+- cone: Draw a triangle with a pointed top first, then draw one ellipse at the base.
+- sphere: Draw one circle. Add one small white highlight ellipse in the top-left area.
+- cube: Draw exactly 3 polygons: top face, left face, and right face. Use 3 different shades of the main color.
+- cuboid: Draw exactly 3 polygons: top face, left face, and right face. Use 3 different shades of the main color. The shape must be clearly wider than it is tall.
+- real_object: Draw a simplified flat vector version of the object. Keep the same thick black outline and flat color style as geometric shapes.
+
+PRE-OUTPUT CHECK:
+Before returning the SVG, verify that no fill covers a black outline stroke.
+If a fill overlaps a stroke, fix the layer order first.
+
+OUTPUT:
+Return ONLY the raw SVG code, starting with <svg and ending with </svg>.
+No markdown code fences. No explanation. No extra text.
