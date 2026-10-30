@@ -1,6 +1,6 @@
 # Rust
 target/
-Cargo.lock
+# (Cargo.lock is committed: the backend is a deployable binary)
 
 # Node / Expo
 node_modules/
