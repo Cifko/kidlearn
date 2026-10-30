@@ -14,6 +14,7 @@ pub fn router() -> Router<AppState> {
         .route("/subcategories/{id}/lesson", get(get_lesson))
         .route("/subcategories/{id}/answer", post(answer_question))
         .route("/categories/{id}/progress", get(get_category_progress))
+        .route("/stats", get(get_stats))
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -64,10 +65,21 @@ struct AnswerRequest {
     asset_key: String,
 }
 
+/// XP for the first correct attempt of a question. Re-answering earns nothing.
+const XP_PER_CORRECT: i64 = 10;
+
 #[derive(Debug, Serialize)]
 struct AnswerResponse {
     correct: bool,
     correct_asset_key: String,
+    xp_earned: i64,
+    total_xp: i64,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+struct Stats {
+    xp: i64,
+    streak_days: i64,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -238,6 +250,12 @@ async fn answer_question(
     .ok_or_else(|| AppError::NotFound("question not found".to_string()))?;
 
     let correct = question.correct_asset == input.asset_key;
+    let previously_correct: Option<i64> =
+        sqlx::query_scalar("SELECT correct FROM progress WHERE user_id = ? AND question_id = ?")
+            .bind(auth.0.id)
+            .bind(question.id)
+            .fetch_optional(&state.db)
+            .await?;
     sqlx::query(
         "INSERT INTO progress (user_id, question_id, correct) VALUES (?, ?, ?)
          ON CONFLICT (user_id, question_id)
@@ -249,10 +267,61 @@ async fn answer_question(
     .execute(&state.db)
     .await?;
 
+    let xp_earned = if correct && previously_correct != Some(1) {
+        XP_PER_CORRECT
+    } else {
+        0
+    };
+    let stats = record_activity(&state.db, auth.0.id, xp_earned).await?;
+
     Ok(Json(AnswerResponse {
         correct,
         correct_asset_key: question.correct_asset,
+        xp_earned,
+        total_xp: stats.xp,
     }))
+}
+
+/// Adds XP and maintains the daily streak: same day keeps it, yesterday
+/// extends it, any gap restarts it at one.
+async fn record_activity(
+    pool: &sqlx::SqlitePool,
+    user_id: i64,
+    xp_earned: i64,
+) -> Result<Stats, AppError> {
+    sqlx::query(
+        "INSERT INTO stats (user_id, xp, streak_days, last_active_date)
+         VALUES (?, ?, 1, date('now'))
+         ON CONFLICT (user_id) DO UPDATE SET
+           xp = stats.xp + excluded.xp,
+           streak_days = CASE
+             WHEN stats.last_active_date = date('now') THEN stats.streak_days
+             WHEN stats.last_active_date = date('now', '-1 day') THEN stats.streak_days + 1
+             ELSE 1 END,
+           last_active_date = date('now')",
+    )
+    .bind(user_id)
+    .bind(xp_earned)
+    .execute(pool)
+    .await?;
+    Ok(
+        sqlx::query_as::<_, Stats>("SELECT xp, streak_days FROM stats WHERE user_id = ?")
+            .bind(user_id)
+            .fetch_one(pool)
+            .await?,
+    )
+}
+
+async fn get_stats(
+    auth: AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<Stats>, AppError> {
+    let stats = sqlx::query_as::<_, Stats>("SELECT xp, streak_days FROM stats WHERE user_id = ?")
+        .bind(auth.0.id)
+        .fetch_optional(&state.db)
+        .await?
+        .unwrap_or(Stats { xp: 0, streak_days: 0 });
+    Ok(Json(stats))
 }
 
 /// Per-subcategory progress for one category, with unlock flags.

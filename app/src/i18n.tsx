@@ -43,6 +43,9 @@ const strings = {
     emptyLesson: 'No questions here yet.',
     exit: 'Exit',
     search: 'Search…',
+    outOfHearts: 'Out of hearts!',
+    tryAgain: 'Try again',
+    streak: 'Streak',
   },
   sk: {
     tagline: 'Nauč sa čokoľvek, krok za krokom.',
@@ -84,6 +87,9 @@ const strings = {
     emptyLesson: 'Zatiaľ tu nie sú otázky.',
     exit: 'Skončiť',
     search: 'Hľadať…',
+    outOfHearts: 'Došli srdcia!',
+    tryAgain: 'Skúsiť znova',
+    streak: 'Séria',
   },
 } as const;
 

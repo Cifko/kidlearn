@@ -52,6 +52,12 @@ const SCHEMA: &[&str] = &[
         answered_at TEXT NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (user_id, question_id)
     )",
+    "CREATE TABLE IF NOT EXISTS stats (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        xp INTEGER NOT NULL DEFAULT 0,
+        streak_days INTEGER NOT NULL DEFAULT 0,
+        last_active_date TEXT
+    )",
 ];
 
 pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {

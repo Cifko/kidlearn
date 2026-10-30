@@ -6,6 +6,8 @@ import { useLang } from '../i18n';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
 
+const HEARTS_PER_RUN = 3;
+
 export function LearnScreen({
   token,
   subId,
@@ -25,7 +27,10 @@ export function LearnScreen({
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [checking, setChecking] = useState(false);
   const [score, setScore] = useState(0);
+  const [runXp, setRunXp] = useState(0);
+  const [hearts, setHearts] = useState(HEARTS_PER_RUN);
   const [finished, setFinished] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +54,18 @@ export function LearnScreen({
     load();
   }, [load]);
 
+  function resetRun() {
+    setIndex(0);
+    setPicked(null);
+    setResult(null);
+    setScore(0);
+    setRunXp(0);
+    setHearts(HEARTS_PER_RUN);
+    setFinished(false);
+    setFailed(false);
+    setError(null);
+  }
+
   async function pick(assetKey: string) {
     if (picked || checking || !lesson) {
       return;
@@ -60,6 +77,9 @@ export function LearnScreen({
       setResult(answer);
       if (answer.correct) {
         setScore((s) => s + 1);
+        setRunXp((xp) => xp + answer.xp_earned);
+      } else {
+        setHearts((h) => h - 1);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Answer failed');
@@ -73,6 +93,10 @@ export function LearnScreen({
     if (!lesson) {
       return;
     }
+    if (result && !result.correct && hearts <= 0) {
+      setFailed(true);
+      return;
+    }
     if (index + 1 >= lesson.questions.length) {
       setFinished(true);
     } else {
@@ -83,7 +107,8 @@ export function LearnScreen({
   }
 
   const total = lesson?.questions.length ?? 0;
-  const progress = total === 0 ? 0 : (finished ? total : index) / total;
+  const progress = total === 0 ? 0 : (finished || failed ? total : index) / total;
+  const over = finished || failed;
 
   return (
     <Screen>
@@ -94,6 +119,7 @@ export function LearnScreen({
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
         </View>
+        <Text style={styles.hearts}>{'♥'.repeat(Math.max(0, hearts))}</Text>
       </View>
 
       {loading && <Text style={styles.muted}>{t('loading')}</Text>}
@@ -108,19 +134,29 @@ export function LearnScreen({
         </>
       )}
 
-      {!loading && !error && lesson && total > 0 && finished && (
+      {!loading && !error && lesson && total > 0 && over && (
         <>
-          <Text style={styles.title}>{t('lessonComplete')}</Text>
+          <Text style={styles.title}>{failed ? t('outOfHearts') : t('lessonComplete')}</Text>
           <Text style={styles.score}>
             {t('score')}: {score} / {total}
           </Text>
+          <Text style={styles.xp}>+{runXp} XP</Text>
           <View style={styles.exitButton}>
-            <ChunkyButton title={t('exit')} onPress={onExit} />
+            {failed ? (
+              <ChunkyButton title={t('tryAgain')} onPress={resetRun} color="blue" />
+            ) : (
+              <ChunkyButton title={t('exit')} onPress={onExit} />
+            )}
           </View>
+          {failed && (
+            <View style={styles.exitButton}>
+              <ChunkyButton title={t('exit')} onPress={onExit} color="gray" />
+            </View>
+          )}
         </>
       )}
 
-      {!loading && !error && lesson && total > 0 && !finished && (
+      {!loading && !error && lesson && total > 0 && !over && (
         <>
           <Text style={styles.subTitle}>{lesson.subcategory.title}</Text>
           <Text style={styles.question}>{lesson.questions[index].text}</Text>
@@ -157,7 +193,9 @@ export function LearnScreen({
                   result.correct ? styles.feedbackTextGood : styles.feedbackTextBad,
                 ]}
               >
-                {result.correct ? t('correct') : t('wrong')}
+                {result.correct
+                  ? `${t('correct')}${result.xp_earned > 0 ? ` +${result.xp_earned} XP` : ''}`
+                  : t('wrong')}
               </Text>
               <View style={styles.nextButton}>
                 <ChunkyButton
@@ -199,6 +237,12 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: colors.green,
   },
+  hearts: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: colors.red,
+    minWidth: 54,
+  },
   muted: {
     fontSize: 15,
     color: colors.muted,
@@ -219,8 +263,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
   },
+  xp: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.orange,
+    textAlign: 'center',
+    marginTop: 4,
+  },
   exitButton: {
-    marginTop: 32,
+    marginTop: 16,
   },
   subTitle: {
     fontSize: 14,

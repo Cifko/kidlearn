@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, ApiError, CategorySummary, User } from '../api';
+import { api, ApiError, CategorySummary, Stats, User } from '../api';
 import { useLang } from '../i18n';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen, Segmented } from '../ui';
@@ -22,6 +22,7 @@ export function HomeScreen({
   const { lang, setLang, t } = useLang();
   const [categories, setCategories] = useState<CategorySummary[]>([]);
   const [query, setQuery] = useState('');
+  const [stats, setStats] = useState<Stats>({ xp: 0, streak_days: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +31,12 @@ export function HomeScreen({
       setLoading(true);
       setError(null);
       try {
-        setCategories(await api.listCategories(token, q.trim() || undefined));
+        const [list, userStats] = await Promise.all([
+          api.listCategories(token, q.trim() || undefined),
+          api.stats(token),
+        ]);
+        setCategories(list);
+        setStats(userStats);
       } catch (err) {
         setError(err instanceof ApiError ? err.message : 'Failed to load');
       } finally {
@@ -54,7 +60,9 @@ export function HomeScreen({
       <View style={styles.header}>
         <View>
           <Text style={styles.heading}>{t('categories')}</Text>
-          <Text style={styles.user}>{user.name}</Text>
+          <Text style={styles.user}>
+            {user.name} · {stats.xp} XP · {t('streak')} {stats.streak_days}
+          </Text>
         </View>
         <TouchableOpacity onPress={handleLogout}>
           <Text style={styles.logout}>{t('logout')}</Text>

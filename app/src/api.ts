@@ -70,6 +70,13 @@ export interface Lesson {
 export interface AnswerResult {
   correct: boolean;
   correct_asset_key: string;
+  xp_earned: number;
+  total_xp: number;
+}
+
+export interface Stats {
+  xp: number;
+  streak_days: number;
 }
 
 export interface SubProgress {
@@ -146,6 +153,7 @@ export const api = {
     }),
   categoryProgress: (token: string, id: number) =>
     request<CategoryProgress>(`/categories/${id}/progress`, { token }),
+  stats: (token: string) => request<Stats>('/stats', { token }),
   assetSvg: async (token: string, path: string): Promise<string> => {
     const response = await fetch(`${API_URL}${path}`, {
       headers: { authorization: `Bearer ${token}` },

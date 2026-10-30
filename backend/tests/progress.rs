@@ -296,3 +296,65 @@ async fn lesson_requires_auth_and_respects_visibility() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn xp_awarded_once_per_question() {
+    let seed = seed().await;
+
+    let (status, result) =
+        answer(&seed.app, &seed.token, seed.sub1, seed.questions[0], "red_ball").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result["xp_earned"], 10);
+    assert_eq!(result["total_xp"], 10);
+
+    // Re-answering correctly earns nothing.
+    let (_, result) =
+        answer(&seed.app, &seed.token, seed.sub1, seed.questions[0], "red_ball").await;
+    assert_eq!(result["xp_earned"], 0);
+    assert_eq!(result["total_xp"], 10);
+
+    // Wrong first, then correct: XP on the first correct attempt.
+    let (_, result) =
+        answer(&seed.app, &seed.token, seed.sub1, seed.questions[1], "red_ball").await;
+    assert_eq!(result["correct"], false);
+    assert_eq!(result["xp_earned"], 0);
+    let (_, result) =
+        answer(&seed.app, &seed.token, seed.sub1, seed.questions[1], "blue_cube").await;
+    assert_eq!(result["xp_earned"], 10);
+    assert_eq!(result["total_xp"], 20);
+
+    let (status, stats) = get_json(&seed.app, &seed.token, "/stats".to_string()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(stats["xp"], 20);
+    assert_eq!(stats["streak_days"], 1);
+}
+
+#[tokio::test]
+async fn streak_extends_on_consecutive_days_and_resets_after_gap() {
+    let seed = seed().await;
+    answer(&seed.app, &seed.token, seed.sub1, seed.questions[0], "red_ball").await;
+
+    // Pretend the last activity was yesterday with a 4-day streak.
+    sqlx::query(
+        "UPDATE stats SET last_active_date = date('now', '-1 day'), streak_days = 4
+         WHERE user_id = (SELECT id FROM users WHERE email = 'dev@localhost')",
+    )
+    .execute(&seed.pool)
+    .await
+    .unwrap();
+    answer(&seed.app, &seed.token, seed.sub1, seed.questions[1], "blue_cube").await;
+    let (_, stats) = get_json(&seed.app, &seed.token, "/stats".to_string()).await;
+    assert_eq!(stats["streak_days"], 5);
+
+    // A 5-day gap restarts the streak at one.
+    sqlx::query(
+        "UPDATE stats SET last_active_date = date('now', '-5 days')
+         WHERE user_id = (SELECT id FROM users WHERE email = 'dev@localhost')",
+    )
+    .execute(&seed.pool)
+    .await
+    .unwrap();
+    answer(&seed.app, &seed.token, seed.sub1, seed.questions[2], "green_cone").await;
+    let (_, stats) = get_json(&seed.app, &seed.token, "/stats".to_string()).await;
+    assert_eq!(stats["streak_days"], 1);
+}
