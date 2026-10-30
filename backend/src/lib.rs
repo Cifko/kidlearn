@@ -1,5 +1,8 @@
+pub mod auth;
 pub mod config;
 pub mod db;
+pub mod error;
+pub mod models;
 
 use axum::{routing::get, Json, Router};
 use serde_json::{json, Value};
@@ -14,6 +17,7 @@ pub struct AppState {
 pub fn create_app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .merge(auth::router())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
