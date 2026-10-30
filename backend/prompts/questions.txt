@@ -9,7 +9,7 @@ MAX_QUESTIONS = {max_questions}
 
 TASK:
 Create a lesson with multiple-choice questions about SUBTOPIC (within SUBJECT).
-The question text, title, and all child-facing strings must be in LANGUAGE. Asset descriptions must be in English.
+The question text, title, and all child-facing strings must be in {language}. Asset descriptions must be in English.
 
 STRICT RULES:
 1. Return ONLY valid JSON according to the schema below. No explanation, no markdown, no extra text.
@@ -29,11 +29,11 @@ viewBox 0 0 200 200, transparent background, thick black outline #2d3436, stroke
 OUTPUT SCHEMA:
 {
   "lesson_id": "string",
-  "title": "string in LANGUAGE",
+  "title": "string in {language}",
   "questions": [
     {
       "id": "q1",
-      "text": "string in LANGUAGE",
+      "text": "string in {language}",
       "type": "multiple_choice_image",
       "options_asset_ids": ["asset_id_1", "asset_id_2", "asset_id_3"],
       "correct_asset_id": "asset_id_1"

@@ -126,12 +126,22 @@ async fn get_category(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<CategoryDetail>, AppError> {
+    Ok(Json(category_detail(&state.db, auth.0.id, id).await?))
+}
+
+/// Loads a category with its ordered subcategories, enforcing visibility.
+/// Shared by the detail endpoint and the generator.
+pub async fn category_detail(
+    pool: &sqlx::SqlitePool,
+    user_id: i64,
+    category_id: i64,
+) -> Result<CategoryDetail, AppError> {
     let category = sqlx::query_as::<_, CategorySummary>(&format!(
         "SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2 AND (c.visibility = 'public' OR c.owner_id = ?1)"
     ))
-    .bind(auth.0.id)
-    .bind(id)
-    .fetch_optional(&state.db)
+    .bind(user_id)
+    .bind(category_id)
+    .fetch_optional(pool)
     .await?
     .ok_or_else(|| AppError::NotFound("category not found".to_string()))?;
 
@@ -140,14 +150,14 @@ async fn get_category(
          FROM subcategories s LEFT JOIN questions q ON q.subcategory_id = s.id
          WHERE s.category_id = ? GROUP BY s.id ORDER BY s.position",
     )
-    .bind(id)
-    .fetch_all(&state.db)
+    .bind(category_id)
+    .fetch_all(pool)
     .await?;
 
-    Ok(Json(CategoryDetail {
+    Ok(CategoryDetail {
         category,
         subcategories,
-    }))
+    })
 }
 
 async fn delete_category(

@@ -7,7 +7,7 @@ COUNT = {count}
 
 TASK:
 Propose COUNT subcategories that break SUBJECT into small learnable steps for a child.
-The child studies in LANGUAGE. All "title" and "summary" strings MUST be written in LANGUAGE.
+The child studies in {language}. All "title" and "summary" strings MUST be written in {language}.
 
 STRICT RULES:
 1. Return ONLY valid JSON according to the schema below. No explanation, no markdown, no extra text.
@@ -19,6 +19,6 @@ STRICT RULES:
 OUTPUT SCHEMA:
 {
   "subcategories": [
-    { "position": 1, "title": "string in LANGUAGE", "summary": "string in LANGUAGE" }
+    { "position": 1, "title": "string in {language}", "summary": "string in {language}" }
   ]
 }

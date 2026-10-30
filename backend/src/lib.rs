@@ -3,7 +3,10 @@ pub mod categories;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod generate;
+pub mod llama;
 pub mod models;
+pub mod prompts;
 
 use axum::{routing::get, Json, Router};
 use serde_json::{json, Value};
@@ -20,6 +23,7 @@ pub fn create_app(state: AppState) -> Router {
         .route("/health", get(health))
         .merge(auth::router())
         .merge(categories::router())
+        .merge(generate::router())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
