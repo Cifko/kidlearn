@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     routing::get,
     Json, Router,
@@ -60,17 +60,33 @@ const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visib
     c.subcategory_count, u.name AS owner_name, (c.owner_id = ?1) AS mine, c.created_at
     FROM categories c JOIN users u ON u.id = c.owner_id";
 
+#[derive(Debug, Default, Deserialize)]
+struct ListQuery {
+    q: Option<String>,
+}
+
 async fn list_categories(
     auth: AuthUser,
     State(state): State<AppState>,
+    Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<CategorySummary>>, AppError> {
-    let rows = sqlx::query_as::<_, CategorySummary>(&format!(
-        "SELECT {SUMMARY_COLUMNS} WHERE c.visibility = 'public' OR c.owner_id = ?1 ORDER BY c.id DESC"
-    ))
-    .bind(auth.0.id)
-    .fetch_all(&state.db)
-    .await?;
-    Ok(Json(rows))
+    let needle = query.q.unwrap_or_default().trim().to_string();
+    let mut sql = format!(
+        "SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)"
+    );
+    if !needle.is_empty() {
+        sql.push_str(" AND (c.title LIKE ?2 ESCAPE '\\' OR c.description LIKE ?2 ESCAPE '\\')");
+    }
+    sql.push_str(" ORDER BY c.id DESC");
+    let mut select = sqlx::query_as::<_, CategorySummary>(&sql).bind(auth.0.id);
+    if !needle.is_empty() {
+        select = select.bind(format!("%{}%", escape_like(&needle)));
+    }
+    Ok(Json(select.fetch_all(&state.db).await?))
+}
+
+fn escape_like(needle: &str) -> String {
+    needle.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
 }
 
 async fn create_category(

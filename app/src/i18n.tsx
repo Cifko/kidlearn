@@ -42,6 +42,7 @@ const strings = {
     score: 'Score',
     emptyLesson: 'No questions here yet.',
     exit: 'Exit',
+    search: 'Search…',
   },
   sk: {
     tagline: 'Nauč sa čokoľvek, krok za krokom.',
@@ -82,6 +83,7 @@ const strings = {
     score: 'Skóre',
     emptyLesson: 'Zatiaľ tu nie sú otázky.',
     exit: 'Skončiť',
+    search: 'Hľadať…',
   },
 } as const;
 

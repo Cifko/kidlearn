@@ -119,7 +119,11 @@ async function request<T>(
 export const api = {
   devLogin: () => request<{ token: string; user: User }>('/auth/dev-login', { method: 'POST' }),
   me: (token: string) => request<User>('/me', { token }),
-  listCategories: (token: string) => request<CategorySummary[]>('/categories', { token }),
+  listCategories: (token: string, q?: string) =>
+    request<CategorySummary[]>(
+      q ? `/categories?q=${encodeURIComponent(q)}` : '/categories',
+      { token },
+    ),
   createCategory: (token: string, input: CreateCategoryInput) =>
     request<CategorySummary>('/categories', { method: 'POST', token, body: input }),
   getCategory: (token: string, id: number) =>

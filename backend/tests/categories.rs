@@ -260,6 +260,67 @@ async fn delete_removes_own_category_only() {
 }
 
 #[tokio::test]
+async fn search_filters_visible_categories() {
+    let (pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    create_category(&app, &token, json!({ "title": "Prvouka", "description": "animals and plants" })).await;
+    create_category(&app, &token, json!({ "title": "Math", "description": "counting to ten" })).await;
+
+    sqlx::query("INSERT INTO users (email, name) VALUES ('other@example.com', 'Other')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO categories (owner_id, title, description, visibility) VALUES
+         ((SELECT id FROM users WHERE email = 'other@example.com'), 'Shared animals', 'wildlife', 'public'),
+         ((SELECT id FROM users WHERE email = 'other@example.com'), 'Secret animals', 'pets', 'private')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/categories?q=animals")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let mut titles: Vec<&str> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["title"].as_str().unwrap())
+        .collect();
+    titles.sort_unstable();
+    assert_eq!(titles, vec!["Prvouka", "Shared animals"]);
+
+    // LIKE wildcards in the query are literal, not patterns.
+    let response = app
+        .oneshot(
+            Request::get("/categories?q=%")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(list.as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
 async fn categories_require_auth() {
     let (_pool, app) = test_state().await;
     let response = app

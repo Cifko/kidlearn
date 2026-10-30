@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, ApiError, CategorySummary, User } from '../api';
 import { useLang } from '../i18n';
@@ -21,23 +21,27 @@ export function HomeScreen({
 }) {
   const { lang, setLang, t } = useLang();
   const [categories, setCategories] = useState<CategorySummary[]>([]);
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setCategories(await api.listCategories(token));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+  const load = useCallback(
+    async (q: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        setCategories(await api.listCategories(token, q.trim() || undefined));
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [token],
+  );
 
   useEffect(() => {
-    load();
+    load('');
   }, [load]);
 
   async function handleLogout() {
@@ -66,10 +70,18 @@ export function HomeScreen({
           onChange={setLang}
         />
       </View>
+      <TextInput
+        style={styles.search}
+        value={query}
+        onChangeText={setQuery}
+        onSubmitEditing={() => load(query)}
+        placeholder={t('search')}
+        returnKeyType="search"
+      />
       <View style={styles.newButton}>
         <ChunkyButton title={t('newCategory')} onPress={onCreate} color="blue" />
       </View>
-      {error && <ErrorBox message={error} onRetry={load} />}
+      {error && <ErrorBox message={error} onRetry={() => load(query)} />}
       {loading && <Text style={styles.muted}>{t('loading')}</Text>}
       {!loading && !error && categories.length === 0 && (
         <Text style={styles.muted}>{t('empty')}</Text>
@@ -122,6 +134,17 @@ const styles = StyleSheet.create({
   },
   langBox: {
     marginBottom: 16,
+  },
+  search: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.ink,
+    marginBottom: 12,
   },
   newButton: {
     marginBottom: 20,
