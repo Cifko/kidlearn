@@ -59,7 +59,6 @@ export function CreateScreen({
       </TouchableOpacity>
       <Text style={styles.heading}>{t('newCategory')}</Text>
       {error && <ErrorBox message={error} />}
-      {phase === 'generating' && <ErrorBox message={t('generating')} />}
       <Field label={t('title')}>
         <TextInput
           style={styles.input}

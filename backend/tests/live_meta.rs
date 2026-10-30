@@ -96,11 +96,33 @@ async fn live_generate_and_render_svg() {
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 65536)
-        .await
-        .unwrap();
-    let detail: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+
+    // Generation runs in the background; poll until it lands.
+    let mut detail = serde_json::Value::Null;
+    for _ in 0..100 {
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/categories/{id}"))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap();
+        detail = serde_json::from_slice(&body).unwrap();
+        assert_ne!(detail["status"], "failed");
+        if detail["status"] == "ready" {
+            break;
+        }
+    }
+    assert_eq!(detail["status"], "ready");
     let subs = detail["subcategories"].as_array().unwrap();
     assert_eq!(subs.len(), 1);
     let question_count = subs[0]["question_count"].as_i64().unwrap();

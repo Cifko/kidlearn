@@ -60,7 +60,5 @@ App (phone): install Expo Go, run `npx expo start`, scan the QR code.
 ## Roadmap
 
 - Google OAuth (replace dev login in production)
-- Background generation jobs with live progress
-- XP, streaks and hearts for the lesson runner
-- Public category gallery with search
+- Durable job queue for generation (in-process tasks are lost on restart)
 - More UI languages (English + Slovak first)

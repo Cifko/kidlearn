@@ -25,26 +25,41 @@ export function DetailScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [data, prog] = await Promise.all([
-        api.getCategory(token, categoryId),
-        api.categoryProgress(token, categoryId),
-      ]);
-      setDetail(data);
-      setProgress(Object.fromEntries(prog.subcategories.map((s) => [s.subcategory_id, s])));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [token, categoryId]);
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!quiet) {
+        setLoading(true);
+      }
+      setError(null);
+      try {
+        const [data, prog] = await Promise.all([
+          api.getCategory(token, categoryId),
+          api.categoryProgress(token, categoryId),
+        ]);
+        setDetail(data);
+        setProgress(Object.fromEntries(prog.subcategories.map((s) => [s.subcategory_id, s])));
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Failed to load');
+      } finally {
+        if (!quiet) {
+          setLoading(false);
+        }
+      }
+    },
+    [token, categoryId],
+  );
 
   useEffect(() => {
-    load();
+    load(false);
   }, [load]);
+
+  useEffect(() => {
+    if (detail?.status !== 'generating') {
+      return;
+    }
+    const timer = setInterval(() => load(true), 3000);
+    return () => clearInterval(timer);
+  }, [detail?.status, load]);
 
   async function handleRegenerate() {
     if (!detail) {
@@ -53,9 +68,8 @@ export function DetailScreen({
     setBusy(true);
     setError(null);
     try {
-      setDetail(await api.generateCategory(token, categoryId, detail.subcategory_count));
-      const prog = await api.categoryProgress(token, categoryId);
-      setProgress(Object.fromEntries(prog.subcategories.map((s) => [s.subcategory_id, s])));
+      await api.generateCategory(token, categoryId, detail.subcategory_count);
+      await load(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Generation failed');
     } finally {
@@ -89,7 +103,7 @@ export function DetailScreen({
         <Text style={styles.back}>← {t('back')}</Text>
       </TouchableOpacity>
       {loading && <Text style={styles.muted}>{t('loading')}</Text>}
-      {error && <ErrorBox message={error} onRetry={load} />}
+      {error && <ErrorBox message={error} onRetry={() => load(false)} />}
       {detail && (
         <>
           <Text style={styles.heading}>{detail.title}</Text>

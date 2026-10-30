@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use axum::{
     extract::{Path, State},
-    http::header,
+    http::{header, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -83,15 +83,15 @@ struct LessonAsset {
     secondary_color: String,
 }
 
-/// Generates subcategories, questions and image specs for an owned category.
-/// Runs synchronously and can take several minutes for 20 subcategories;
-/// background jobs with live progress come later.
+/// Starts generating subcategories, questions and image specs for an owned
+/// category. Returns 202 immediately; the client polls the detail endpoint
+/// until the status flips to `ready` or `failed`.
 async fn generate_category(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<i64>,
     body: Option<Json<GenerateRequest>>,
-) -> Result<Json<CategoryDetail>, AppError> {
+) -> Result<(StatusCode, Json<CategoryDetail>), AppError> {
     let client = MetaClient::from_config(&state.config).ok_or_else(|| {
         AppError::ServiceUnavailable(
             "META_API_KEY is not configured; generation is disabled".to_string(),
@@ -127,31 +127,29 @@ async fn generate_category(
         .execute(&state.db)
         .await?;
 
-    let outcome = run_generation(
-        &state.db,
-        &client,
-        &category,
-        count,
-        min_questions,
-        max_questions,
-    )
-    .await;
-    match outcome {
-        Ok(()) => {
-            sqlx::query("UPDATE categories SET status = 'ready' WHERE id = ?")
-                .bind(id)
-                .execute(&state.db)
-                .await?;
-            Ok(Json(category_detail(&state.db, auth.0.id, id).await?))
-        }
-        Err(err) => {
-            sqlx::query("UPDATE categories SET status = 'failed' WHERE id = ?")
-                .bind(id)
-                .execute(&state.db)
-                .await?;
-            Err(err)
-        }
-    }
+    // The job runs in this process; a restart abandons it as `generating`.
+    // A durable queue comes later.
+    let pool = state.db.clone();
+    tokio::spawn(async move {
+        let outcome = run_generation(
+            &pool,
+            &client,
+            &category,
+            count,
+            min_questions,
+            max_questions,
+        )
+        .await;
+        let status = if outcome.is_ok() { "ready" } else { "failed" };
+        let _ = sqlx::query("UPDATE categories SET status = ? WHERE id = ?")
+            .bind(status)
+            .bind(category.id)
+            .execute(&pool)
+            .await;
+    });
+
+    let detail = category_detail(&state.db, auth.0.id, id).await?;
+    Ok((StatusCode::ACCEPTED, Json(detail)))
 }
 
 async fn run_generation(

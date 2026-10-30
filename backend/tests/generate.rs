@@ -208,3 +208,55 @@ async fn svg_uncached_without_key_reports_disabled() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
 }
+
+#[tokio::test]
+async fn generate_runs_in_background_and_reports_failure() {
+    let mut config = Config::for_tests();
+    config.meta_api_key = Some("test-key".to_string());
+    config.meta_api_base = "http://127.0.0.1:1".to_string();
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    let app = create_app(AppState {
+        db: pool.clone(),
+        config,
+    });
+    let token = login_token(&app).await;
+    let id = create_category_id(&app, &token).await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post(format!("/categories/{id}/generate"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+
+    // The background job fails fast (connection refused) and flips the status.
+    let mut status = String::new();
+    for _ in 0..100 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/categories/{id}"))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap();
+        let detail: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        status = detail["status"].as_str().unwrap().to_string();
+        if status != "generating" {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(status, "failed");
+}
