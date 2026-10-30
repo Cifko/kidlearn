@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod categories;
 pub mod config;
 pub mod db;
 pub mod error;
@@ -18,6 +19,7 @@ pub fn create_app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .merge(auth::router())
+        .merge(categories::router())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
