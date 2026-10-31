@@ -19,7 +19,9 @@ async fn health_returns_ok() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json, serde_json::json!({ "status": "ok" }));
 }
@@ -36,6 +38,16 @@ async fn database_schema_creates_all_tables() {
     .unwrap();
     assert_eq!(
         tables,
-        vec!["assets", "lessons", "likes", "progress", "questions", "stats", "subjects", "users"]
+        vec![
+            "assets",
+            "lessons",
+            "likes",
+            "llm_calls",
+            "progress",
+            "questions",
+            "stats",
+            "subjects",
+            "users"
+        ]
     );
 }

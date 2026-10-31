@@ -94,6 +94,21 @@ export interface Stats {
   streak_days: number;
 }
 
+export interface LlmCall {
+  id: number;
+  created_at: string;
+  kind: string;
+  subject_id: number | null;
+  lesson_id: number | null;
+  asset_id: number | null;
+  label: string;
+  model: string;
+  duration_ms: number;
+  error: string | null;
+  prompt: string;
+  response: string | null;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -166,6 +181,17 @@ export const api = {
   stats: (token: string) => request<Stats>('/stats', { token }),
   aiSearch: (token: string, q: string) =>
     request<SubjectSummary[]>(`/subjects/ai-search?q=${encodeURIComponent(q)}`, { token }),
+  listLlmCalls: (token: string, params?: { subject_id?: number; kind?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.subject_id !== undefined) {
+      search.set('subject_id', String(params.subject_id));
+    }
+    if (params?.kind !== undefined) {
+      search.set('kind', params.kind);
+    }
+    const query = search.toString();
+    return request<LlmCall[]>(`/debug/llm-calls${query ? `?${query}` : ''}`, { token });
+  },
   assetSvg: async (token: string, path: string): Promise<string> => {
     const response = await fetch(`${API_URL}${path}`, {
       headers: { authorization: `Bearer ${token}` },

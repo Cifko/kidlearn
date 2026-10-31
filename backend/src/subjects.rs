@@ -6,16 +6,21 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{auth::AuthUser, error::AppError, meta::MetaClient, prompts, AppState};
+use crate::{
+    auth::AuthUser,
+    error::AppError,
+    meta::{CallContext, MetaClient},
+    prompts, AppState,
+};
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/subjects", get(list_subjects).post(create_subject))
+        .route("/subjects/{id}", get(get_subject).delete(delete_subject))
         .route(
-            "/subjects/{id}",
-            get(get_subject).delete(delete_subject),
+            "/subjects/{id}/like",
+            post(like_subject).delete(unlike_subject),
         )
-        .route("/subjects/{id}/like", post(like_subject).delete(unlike_subject))
         .route("/subjects/ai-search", get(ai_search))
 }
 
@@ -123,9 +128,8 @@ async fn list_subjects(
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<SubjectSummary>>, AppError> {
     let needle = query.q.unwrap_or_default().trim().to_string();
-    let mut sql = format!(
-        "SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)"
-    );
+    let mut sql =
+        format!("SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)");
     if !needle.is_empty() {
         sql.push_str(
             " AND (c.title LIKE ?2 ESCAPE '\\' OR c.description LIKE ?2 ESCAPE '\\'
@@ -138,13 +142,14 @@ async fn list_subjects(
         select = select.bind(format!("%{}%", escape_like(&needle)));
     }
     let rows: Vec<SubjectRow> = select.fetch_all(&state.db).await?;
-    Ok(Json(
-        rows.into_iter().map(SubjectSummary::from).collect(),
-    ))
+    Ok(Json(rows.into_iter().map(SubjectSummary::from).collect()))
 }
 
 fn escape_like(needle: &str) -> String {
-    needle.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+    needle
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -179,9 +184,13 @@ async fn ai_search(
     if needle.is_empty() {
         return Err(AppError::BadRequest("q is required".to_string()));
     }
-    let client = MetaClient::from_config(&state.config).ok_or_else(|| {
-        AppError::ServiceUnavailable("META_API_KEY is not configured; AI search is disabled".to_string())
-    })?;
+    let client = MetaClient::from_config(&state.config)
+        .map(|client| client.with_recorder(state.db.clone(), auth.0.id))
+        .ok_or_else(|| {
+            AppError::ServiceUnavailable(
+                "META_API_KEY is not configured; AI search is disabled".to_string(),
+            )
+        })?;
 
     let rows = sqlx::query_as::<_, SubjectRow>(&format!(
         "SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)
@@ -205,8 +214,14 @@ async fn ai_search(
         })
         .collect();
     let max_results = query.max_results.unwrap_or(10).clamp(1, 20);
+    let ctx = CallContext {
+        kind: "search",
+        label: needle.chars().take(80).collect(),
+        ..Default::default()
+    };
     let ranked: RankedIds = client
         .chat_json(
+            &ctx,
             &prompts::render_search(
                 &needle,
                 &serde_json::to_string(&candidates).unwrap_or_else(|_| "[]".to_string()),
@@ -252,7 +267,9 @@ async fn create_subject(
     let language = input.language.unwrap_or_else(|| "en".to_string());
     let language = language.trim().to_string();
     if language.is_empty() || language.len() > 8 {
-        return Err(AppError::BadRequest("language must be 1-8 characters".to_string()));
+        return Err(AppError::BadRequest(
+            "language must be 1-8 characters".to_string(),
+        ));
     }
     let lesson_count = input.lesson_count.unwrap_or(20).clamp(1, 50);
     let description = input.description.unwrap_or_default();
@@ -273,13 +290,11 @@ async fn create_subject(
     .fetch_one(&state.db)
     .await?;
 
-    let row = sqlx::query_as::<_, SubjectRow>(&format!(
-        "SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2"
-    ))
-    .bind(auth.0.id)
-    .bind(id)
-    .fetch_one(&state.db)
-    .await?;
+    let row = sqlx::query_as::<_, SubjectRow>(&format!("SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2"))
+        .bind(auth.0.id)
+        .bind(id)
+        .fetch_one(&state.db)
+        .await?;
     Ok((StatusCode::CREATED, Json(SubjectSummary::from(row))))
 }
 
@@ -317,10 +332,7 @@ pub async fn subject_detail(
     .fetch_all(pool)
     .await?;
 
-    Ok(SubjectDetail {
-        subject,
-        lessons,
-    })
+    Ok(SubjectDetail { subject, lessons })
 }
 
 async fn subject_summary(

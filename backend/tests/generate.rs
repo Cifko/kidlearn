@@ -282,31 +282,32 @@ fn init_logging() {
     });
 }
 
+// One document serves both the plan and the lesson calls; each parser
+// reads its own keys and ignores the rest.
+const LESSON_FIXTURE: &str = r##"{
+    "lessons": [
+        {"position": 1, "title": "L1", "summary": "first"},
+        {"position": 2, "title": "L2", "summary": "second"},
+        {"position": 3, "title": "L3", "summary": "third"}
+    ],
+    "questions": [
+        {"id": "q1", "text": "Pick a", "type": "multiple_choice_image",
+         "options_asset_ids": ["a", "b"], "correct_asset_id": "a"},
+        {"id": "q2", "text": "Pick b", "type": "multiple_choice_image",
+         "options_asset_ids": ["a", "b"], "correct_asset_id": "b"}
+    ],
+    "assets": [
+        {"id": "a", "type": "real_object", "shape": null,
+         "description": "A red ball", "main_color": "#ff0000", "secondary_color": "#ff8888"},
+        {"id": "b", "type": "real_object", "shape": null,
+         "description": "A blue cube", "main_color": "#0000ff", "secondary_color": "#8888ff"}
+    ]
+}"##;
+
 #[tokio::test]
 async fn generate_fans_out_and_tracks_progress() {
     init_logging();
-    // One document serves both the plan and the lesson calls; each parser
-    // reads its own keys and ignores the rest.
-    let content = r##"{
-        "lessons": [
-            {"position": 1, "title": "L1", "summary": "first"},
-            {"position": 2, "title": "L2", "summary": "second"},
-            {"position": 3, "title": "L3", "summary": "third"}
-        ],
-        "questions": [
-            {"id": "q1", "text": "Pick a", "type": "multiple_choice_image",
-             "options_asset_ids": ["a", "b"], "correct_asset_id": "a"},
-            {"id": "q2", "text": "Pick b", "type": "multiple_choice_image",
-             "options_asset_ids": ["a", "b"], "correct_asset_id": "b"}
-        ],
-        "assets": [
-            {"id": "a", "type": "real_object", "shape": null,
-             "description": "A red ball", "main_color": "#ff0000", "secondary_color": "#ff8888"},
-            {"id": "b", "type": "real_object", "shape": null,
-             "description": "A blue cube", "main_color": "#0000ff", "secondary_color": "#8888ff"}
-        ]
-    }"##;
-    let (url, _server) = mock_lesson_backend(content).await;
+    let (url, _server) = mock_lesson_backend(LESSON_FIXTURE).await;
     let mut config = Config::for_tests();
     config.meta_api_key = Some("test-key".to_string());
     config.meta_api_base = url;
@@ -360,4 +361,137 @@ async fn generate_fans_out_and_tracks_progress() {
         assert_eq!(lesson["position"], (index + 1) as i64);
         assert_eq!(lesson["question_count"], 2);
     }
+}
+
+async fn wait_until_settled(app: &axum::Router, token: &str, id: i64) -> serde_json::Value {
+    for _ in 0..100 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/subjects/{id}"))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap();
+        let detail: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        if detail["status"] != "generating" {
+            return detail;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    panic!("generation did not settle in time");
+}
+
+async fn list_calls(app: &axum::Router, token: &str, query: &str) -> serde_json::Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/debug/llm-calls{query}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 262144)
+        .await
+        .unwrap();
+    serde_json::from_slice(&body).unwrap()
+}
+
+async fn start_mock_generation(app: &axum::Router, token: &str, id: i64) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post(format!("/subjects/{id}/generate"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "lesson_count": 2, "min_questions": 1, "max_questions": 2 })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+}
+
+#[tokio::test]
+async fn generate_records_prompts_and_answers() {
+    let (url, _server) = mock_lesson_backend(LESSON_FIXTURE).await;
+    let mut config = Config::for_tests();
+    config.meta_api_key = Some("test-key".to_string());
+    config.meta_api_base = url;
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    let app = create_app(AppState::new(pool, config));
+    let token = login_token(&app).await;
+    let id = create_subject_id(&app, &token).await;
+    start_mock_generation(&app, &token, id).await;
+    let detail = wait_until_settled(&app, &token, id).await;
+    assert_eq!(detail["status"], "ready");
+
+    let plans = list_calls(&app, &token, "?kind=plan").await;
+    let plans = plans.as_array().unwrap();
+    assert_eq!(plans.len(), 1);
+    assert!(plans[0]["prompt"].as_str().unwrap().contains("Math"));
+    assert!(plans[0]["response"].as_str().unwrap().contains("L1"));
+    assert_eq!(plans[0]["subject_id"], id);
+    assert_eq!(plans[0]["model"], "test-model");
+
+    let questions = list_calls(&app, &token, "?kind=questions").await;
+    let questions = questions.as_array().unwrap();
+    assert_eq!(questions.len(), 2);
+    let mut labels: Vec<&str> = questions
+        .iter()
+        .map(|call| call["label"].as_str().unwrap())
+        .collect();
+    labels.sort_unstable();
+    assert_eq!(labels, vec!["L1", "L2"]);
+    assert!(questions[0]["response"]
+        .as_str()
+        .unwrap()
+        .contains("Pick a"));
+
+    // SVG prefill runs after the subject flips to ready.
+    for _ in 0..100 {
+        let svgs = list_calls(&app, &token, "?kind=svg").await;
+        if svgs.as_array().unwrap().len() == 4 {
+            assert!(svgs[0]["prompt"]
+                .as_str()
+                .unwrap()
+                .contains("SVG image generator"));
+            assert!(svgs[0]["asset_id"].as_i64().unwrap() > 0);
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    panic!("svg prefill calls were not recorded in time");
+}
+
+#[tokio::test]
+async fn generate_records_errors() {
+    let mut config = Config::for_tests();
+    config.meta_api_key = Some("test-key".to_string());
+    config.meta_api_base = "http://127.0.0.1:1".to_string();
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    let app = create_app(AppState::new(pool, config));
+    let token = login_token(&app).await;
+    let id = create_subject_id(&app, &token).await;
+    start_mock_generation(&app, &token, id).await;
+    let detail = wait_until_settled(&app, &token, id).await;
+    assert_eq!(detail["status"], "failed");
+
+    let calls = list_calls(&app, &token, "").await;
+    let calls = calls.as_array().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0]["kind"], "plan");
+    assert!(calls[0]["error"].as_str().unwrap().contains("unreachable"));
+    assert!(calls[0]["response"].is_null());
 }

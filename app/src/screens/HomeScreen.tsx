@@ -12,12 +12,14 @@ export function HomeScreen({
   onOpen,
   onCreate,
   onLogout,
+  onPrompts,
 }: {
   token: string;
   user: User;
   onOpen: (id: number) => void;
   onCreate: () => void;
   onLogout: () => void;
+  onPrompts: () => void;
 }) {
   const { lang, setLang, t } = useLang();
   const [subjects, setSubjects] = useState<SubjectSummary[]>([]);
@@ -83,9 +85,14 @@ export function HomeScreen({
             {user.name} · {stats.xp} XP · {t('streak')} {stats.streak_days}
           </Text>
         </View>
-        <TouchableOpacity onPress={handleLogout}>
-          <Text style={styles.logout}>{t('logout')}</Text>
-        </TouchableOpacity>
+        <View style={styles.links}>
+          <TouchableOpacity onPress={onPrompts}>
+            <Text style={styles.link}>{t('prompts')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout}>
+            <Text style={styles.link}>{t('logout')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <View style={styles.langBox}>
         <Segmented
@@ -160,11 +167,15 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 2,
   },
-  logout: {
+  links: {
+    gap: 8,
+    paddingTop: 6,
+    alignItems: 'flex-end',
+  },
+  link: {
     fontSize: 15,
     fontWeight: '700',
     color: colors.blue,
-    paddingTop: 6,
   },
   langBox: {
     marginBottom: 16,

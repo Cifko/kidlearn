@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod config;
 pub mod db;
+pub mod debug;
 pub mod error;
 pub mod generate;
 pub mod meta;
@@ -34,6 +35,7 @@ pub fn create_app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .merge(auth::router())
+        .merge(debug::router())
         .merge(subjects::router())
         .merge(generate::router())
         .merge(progress::router())

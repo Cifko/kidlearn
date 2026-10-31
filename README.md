@@ -17,6 +17,8 @@ Duolingo-style multiple-choice questions, with pictures.
    lesson. Questions reference image assets; SVGs are generated on demand.
 4. The kid opens a subject, sees the ordered lessons, and learns
    through them with Duolingo-like progress tracking.
+5. Every AI call's prompt and answer is stored; open "AI prompts" from
+   home to inspect what the model saw when an output looks wrong.
 
 ## Layout
 

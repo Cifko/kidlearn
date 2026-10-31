@@ -8,6 +8,7 @@ import { DetailScreen } from './src/screens/DetailScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LearnScreen } from './src/screens/LearnScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { PromptsScreen } from './src/screens/PromptsScreen';
 import { Screen } from './src/ui';
 
 type Route =
@@ -15,7 +16,8 @@ type Route =
   | { name: 'home' }
   | { name: 'create' }
   | { name: 'detail'; id: number }
-  | { name: 'learn'; subjectId: number; lessonId: number };
+  | { name: 'learn'; subjectId: number; lessonId: number }
+  | { name: 'prompts' };
 
 function Shell() {
   const { t } = useLang();
@@ -99,6 +101,10 @@ function Shell() {
     );
   }
 
+  if (route.name === 'prompts') {
+    return <PromptsScreen token={token} onBack={() => setRoute({ name: 'home' })} />;
+  }
+
   return (
     <HomeScreen
       token={token}
@@ -106,6 +112,7 @@ function Shell() {
       onOpen={(id) => setRoute({ name: 'detail', id })}
       onCreate={() => setRoute({ name: 'create' })}
       onLogout={handleLogout}
+      onPrompts={() => setRoute({ name: 'prompts' })}
     />
   );
 }

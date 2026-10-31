@@ -16,7 +16,7 @@ use tracing::Instrument;
 use crate::{
     auth::AuthUser,
     error::AppError,
-    meta::MetaClient,
+    meta::{CallContext, MetaClient},
     models::Subject,
     prompts,
     subjects::{subject_detail, SubjectDetail},
@@ -97,7 +97,9 @@ async fn generate_subject(
     Path(id): Path<i64>,
     body: Option<Json<GenerateRequest>>,
 ) -> Result<(StatusCode, Json<SubjectDetail>), AppError> {
-    let Some(client) = MetaClient::from_config(&state.config) else {
+    let Some(client) = MetaClient::from_config(&state.config)
+        .map(|client| client.with_recorder(state.db.clone(), auth.0.id))
+    else {
         tracing::warn!("generation requested but META_API_KEY is not set");
         return Err(AppError::ServiceUnavailable(
             "META_API_KEY is not configured; generation is disabled".to_string(),
@@ -206,8 +208,18 @@ async fn run_lessons(
         format!("{} ({})", subject.title, subject.description.trim())
     };
 
+    let ctx = CallContext {
+        kind: "plan",
+        subject_id: Some(subject.id),
+        label: topic.chars().take(80).collect(),
+        ..Default::default()
+    };
     let plan: PlanResponse = client
-        .chat_json(&prompts::render_plan(&topic, &subject.language, count), 0.7)
+        .chat_json(
+            &ctx,
+            &prompts::render_plan(&topic, &subject.language, count),
+            0.7,
+        )
         .await?;
     if plan.lessons.is_empty() {
         return Err(AppError::ServiceUnavailable(
@@ -286,9 +298,17 @@ async fn generate_one_lesson(job: LessonJob) -> Result<(), AppError> {
     } else {
         format!("{title}: {summary}")
     };
+    let ctx = CallContext {
+        kind: "questions",
+        subject_id: Some(job.subject_id),
+        lesson_id: Some(lesson_id),
+        label: title.clone(),
+        ..Default::default()
+    };
     let lesson: LessonResponse = job
         .client
         .chat_json(
+            &ctx,
             &prompts::render_questions(
                 &job.topic,
                 &lesson_topic,
@@ -311,8 +331,9 @@ async fn generate_one_lesson(job: LessonJob) -> Result<(), AppError> {
 /// Renders every still-missing SVG so opening lessons is instant.
 /// Best effort: failures are ignored, the lazy path covers them.
 async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_id: i64) {
-    let assets: Vec<(i64, String)> = match sqlx::query_as(
-        "SELECT a.id, a.spec_json FROM assets a JOIN lessons s ON s.id = a.lesson_id
+    let assets: Vec<(i64, String, i64, String)> = match sqlx::query_as(
+        "SELECT a.id, a.asset_key, a.lesson_id, a.spec_json FROM assets a
+         JOIN lessons s ON s.id = a.lesson_id
          WHERE s.subject_id = ? AND a.svg_text IS NULL",
     )
     .bind(subject_id)
@@ -332,15 +353,22 @@ async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_
     let total = assets.len();
     let semaphore = Arc::new(Semaphore::new(FAN_OUT));
     let mut handles = Vec::with_capacity(total);
-    for (id, spec) in assets {
+    for (id, key, lesson_id, spec) in assets {
         let Ok(permit) = semaphore.clone().acquire_owned().await else {
             break;
         };
         let pool = pool.clone();
         let client = client.clone();
+        let ctx = CallContext {
+            kind: "svg",
+            subject_id: Some(subject_id),
+            lesson_id: Some(lesson_id),
+            asset_id: Some(id),
+            label: key,
+        };
         handles.push(tokio::spawn(async move {
             let _permit = permit;
-            render_and_store_svg(&pool, &client, id, &spec).await
+            render_and_store_svg(&pool, &client, &ctx, id, &spec).await
         }));
     }
     let mut failed = 0;
@@ -358,10 +386,13 @@ async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_
 async fn render_and_store_svg(
     pool: &sqlx::SqlitePool,
     client: &MetaClient,
+    ctx: &CallContext,
     asset_id: i64,
     spec_json: &str,
 ) -> Result<Option<String>, AppError> {
-    let svg = client.chat_text(&prompts::render_svg(spec_json)).await?;
+    let svg = client
+        .chat_text(ctx, &prompts::render_svg(spec_json))
+        .await?;
     let svg = svg.trim().to_string();
     if !svg.starts_with("<svg") {
         return Ok(None);
@@ -449,8 +480,8 @@ async fn asset_svg(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<impl IntoResponse, AppError> {
-    let row: Option<(String, Option<String>)> = sqlx::query_as(
-        "SELECT a.spec_json, a.svg_text FROM assets a
+    let row: Option<(String, Option<String>, String, i64, i64)> = sqlx::query_as(
+        "SELECT a.spec_json, a.svg_text, a.asset_key, s.id, c.id FROM assets a
          JOIN lessons s ON s.id = a.lesson_id
          JOIN subjects c ON c.id = s.subject_id
          WHERE a.id = ? AND (c.visibility = 'public' OR c.owner_id = ?)",
@@ -459,19 +490,28 @@ async fn asset_svg(
     .bind(auth.0.id)
     .fetch_optional(&state.db)
     .await?;
-    let (spec_json, cached) =
+    let (spec_json, cached, key, lesson_id, subject_id) =
         row.ok_or_else(|| AppError::NotFound("asset not found".to_string()))?;
     if let Some(svg) = cached {
         return Ok(svg_response(svg));
     }
 
-    let Some(client) = MetaClient::from_config(&state.config) else {
+    let Some(client) = MetaClient::from_config(&state.config)
+        .map(|client| client.with_recorder(state.db.clone(), auth.0.id))
+    else {
         tracing::warn!("image requested but META_API_KEY is not set");
         return Err(AppError::ServiceUnavailable(
             "META_API_KEY is not configured; image generation is disabled".to_string(),
         ));
     };
-    let svg = render_and_store_svg(&state.db, &client, id, &spec_json)
+    let ctx = CallContext {
+        kind: "svg",
+        subject_id: Some(subject_id),
+        lesson_id: Some(lesson_id),
+        asset_id: Some(id),
+        label: key,
+    };
+    let svg = render_and_store_svg(&state.db, &client, &ctx, id, &spec_json)
         .await?
         .ok_or_else(|| {
             tracing::warn!(asset_id = id, "generation backend returned invalid SVG");

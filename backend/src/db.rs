@@ -70,6 +70,22 @@ const SCHEMA: &[&str] = &[
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (user_id, subject_id)
     )",
+    "CREATE TABLE IF NOT EXISTS llm_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        subject_id INTEGER,
+        lesson_id INTEGER,
+        asset_id INTEGER,
+        label TEXT NOT NULL DEFAULT '',
+        model TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        response TEXT,
+        error TEXT,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )",
+    "CREATE INDEX IF NOT EXISTS idx_llm_calls_user ON llm_calls (user_id, id DESC)",
 ];
 
 /// ALTERs for databases created before the matching column existed.

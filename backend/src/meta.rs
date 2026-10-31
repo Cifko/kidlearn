@@ -2,6 +2,17 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{config::Config, error::AppError};
 
+/// What one model call was for. Stored alongside the prompt and answer so
+/// bad outputs (like a backwards ladybug) can be traced back to the input.
+#[derive(Debug, Clone, Default)]
+pub struct CallContext {
+    pub kind: &'static str,
+    pub subject_id: Option<i64>,
+    pub lesson_id: Option<i64>,
+    pub asset_id: Option<i64>,
+    pub label: String,
+}
+
 /// Client for the Meta Model API at `api.meta.ai` (OpenAI-compatible `/chat/completions`).
 #[derive(Clone)]
 pub struct MetaClient {
@@ -9,6 +20,13 @@ pub struct MetaClient {
     api_key: String,
     model: String,
     http: reqwest::Client,
+    recorder: Option<Recorder>,
+}
+
+#[derive(Clone)]
+struct Recorder {
+    pool: sqlx::SqlitePool,
+    user_id: i64,
 }
 
 impl MetaClient {
@@ -25,16 +43,24 @@ impl MetaClient {
             api_key,
             model: config.meta_model.clone(),
             http,
+            recorder: None,
         })
+    }
+
+    /// Stores every prompt and answer in `llm_calls` for later inspection.
+    pub fn with_recorder(mut self, pool: sqlx::SqlitePool, user_id: i64) -> Self {
+        self.recorder = Some(Recorder { pool, user_id });
+        self
     }
 
     /// Asks the model for a JSON document parsed into `T`.
     pub async fn chat_json<T: DeserializeOwned>(
         &self,
+        ctx: &CallContext,
         prompt: &str,
         temperature: f32,
     ) -> Result<T, AppError> {
-        let text = self.chat(prompt, temperature, true).await?;
+        let text = self.chat(ctx, prompt, temperature, true).await?;
         serde_json::from_str(extract_json(&text)).map_err(|err| {
             tracing::error!(%err, "generation backend returned invalid JSON");
             AppError::ServiceUnavailable(format!("generation backend returned invalid JSON: {err}"))
@@ -42,11 +68,62 @@ impl MetaClient {
     }
 
     /// Asks the model for raw text (used for SVG art).
-    pub async fn chat_text(&self, prompt: &str) -> Result<String, AppError> {
-        self.chat(prompt, 0.2, false).await
+    pub async fn chat_text(&self, ctx: &CallContext, prompt: &str) -> Result<String, AppError> {
+        self.chat(ctx, prompt, 0.2, false).await
+    }
+
+    async fn record(
+        &self,
+        ctx: &CallContext,
+        prompt: &str,
+        result: &Result<String, AppError>,
+        duration_ms: i64,
+    ) {
+        let Some(recorder) = &self.recorder else {
+            return;
+        };
+        let (response, error) = match result {
+            Ok(text) => (Some(text.as_str()), None),
+            Err(err) => (None, Some(format!("{err:?}"))),
+        };
+        if let Err(err) = sqlx::query(
+            "INSERT INTO llm_calls (user_id, kind, subject_id, lesson_id, asset_id, label,
+                 model, prompt, response, error, duration_ms)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(recorder.user_id)
+        .bind(ctx.kind)
+        .bind(ctx.subject_id)
+        .bind(ctx.lesson_id)
+        .bind(ctx.asset_id)
+        .bind(&ctx.label)
+        .bind(&self.model)
+        .bind(prompt)
+        .bind(response)
+        .bind(error)
+        .bind(duration_ms)
+        .execute(&recorder.pool)
+        .await
+        {
+            tracing::warn!(%err, "failed to record llm call");
+        }
     }
 
     async fn chat(
+        &self,
+        ctx: &CallContext,
+        prompt: &str,
+        temperature: f32,
+        json_mode: bool,
+    ) -> Result<String, AppError> {
+        let start = std::time::Instant::now();
+        let result = self.chat_inner(prompt, temperature, json_mode).await;
+        self.record(ctx, prompt, &result, start.elapsed().as_millis() as i64)
+            .await;
+        result
+    }
+
+    async fn chat_inner(
         &self,
         prompt: &str,
         temperature: f32,
