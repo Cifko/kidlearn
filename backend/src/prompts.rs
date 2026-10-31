@@ -15,10 +15,15 @@ pub fn render_questions(
     language: &str,
     min_questions: i64,
     max_questions: i64,
+    grade: Option<i64>,
 ) -> String {
+    let grade = grade
+        .map(|grade| format!("grade {grade}"))
+        .unwrap_or_else(|| "unspecified".to_string());
     QUESTIONS
         .replace("{subject}", subject)
         .replace("{lesson}", lesson)
+        .replace("{grade}", &grade)
         .replace("{language}", language)
         .replace("{min_questions}", &min_questions.to_string())
         .replace("{max_questions}", &max_questions.to_string())
@@ -52,13 +57,18 @@ mod tests {
 
     #[test]
     fn questions_prompt_fills_all_placeholders() {
-        let prompt = render_questions("math", "addition", "en", 5, 10);
+        let prompt = render_questions("math", "addition", "en", 5, 10, Some(2));
         assert!(prompt.contains("addition"));
         assert!(prompt.contains("MIN_QUESTIONS = 5"));
         assert!(prompt.contains("MAX_QUESTIONS = 10"));
+        assert!(prompt.contains("GRADE = grade 2"));
         assert!(!prompt.contains("{lesson}"));
+        assert!(!prompt.contains("{grade}"));
         assert!(!prompt.contains("{min_questions}"));
         assert!(!prompt.contains("{max_questions}"));
+
+        let prompt = render_questions("math", "addition", "en", 5, 10, None);
+        assert!(prompt.contains("GRADE = unspecified"));
     }
 
     #[test]
@@ -66,12 +76,14 @@ mod tests {
         let plan = render_plan("math", "en", 20);
         assert!(plan.contains("tangential"));
         assert!(plan.contains("checkable skill"));
-        let questions = render_questions("math", "addition", "en", 5, 10);
+        let questions = render_questions("math", "addition", "en", 5, 10, None);
         assert!(questions.contains("differ ONLY in the tested attribute"));
         assert!(questions.contains("FORBIDDEN"));
         assert!(questions.contains("\"focus\""));
         assert!(questions.contains("Which picture shows 4 apples?"));
         assert!(!questions.contains("How many apples?"));
+        assert!(questions.contains("multiple_choice_text"));
+        assert!(questions.contains("ONE QUESTION, ONE KIND"));
     }
 
     #[test]

@@ -21,6 +21,7 @@ export function CreateScreen({
   const [description, setDescription] = useState('');
   const [tagsText, setTagsText] = useState('');
   const [contentLang, setContentLang] = useState<Lang>(lang);
+  const [grade, setGrade] = useState<'any' | '1' | '2' | '3' | '4'>('any');
   const [count, setCount] = useState(20);
   const [phase, setPhase] = useState<Phase>('editing');
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +45,7 @@ export function CreateScreen({
         language: contentLang,
         lesson_count: count,
         tags,
+        grade: grade === 'any' ? null : Number(grade),
       });
       setPhase('generating');
       // The UI language travels with the request so lessons come back
@@ -101,6 +103,19 @@ export function CreateScreen({
           ]}
           value={contentLang}
           onChange={setContentLang}
+        />
+      </Field>
+      <Field label={t('grade')}>
+        <Segmented<'any' | '1' | '2' | '3' | '4'>
+          options={[
+            { value: 'any', label: t('gradeAny') },
+            { value: '1', label: '1' },
+            { value: '2', label: '2' },
+            { value: '3', label: '3' },
+            { value: '4', label: '4' },
+          ]}
+          value={grade}
+          onChange={setGrade}
         />
       </Field>
       <Field label={t('lessons')}>

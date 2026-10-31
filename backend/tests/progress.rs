@@ -136,15 +136,44 @@ async fn answer(
     question_id: i64,
     asset_key: &str,
 ) -> (StatusCode, serde_json::Value) {
+    answer_body(
+        app,
+        token,
+        sub_id,
+        json!({ "question_id": question_id, "asset_key": asset_key }),
+    )
+    .await
+}
+
+async fn answer_text(
+    app: &axum::Router,
+    token: &str,
+    sub_id: i64,
+    question_id: i64,
+    text: &str,
+) -> (StatusCode, serde_json::Value) {
+    answer_body(
+        app,
+        token,
+        sub_id,
+        json!({ "question_id": question_id, "text": text }),
+    )
+    .await
+}
+
+async fn answer_body(
+    app: &axum::Router,
+    token: &str,
+    sub_id: i64,
+    body: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
     let response = app
         .clone()
         .oneshot(
             Request::post(format!("/lessons/{sub_id}/answer"))
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
-                .body(Body::from(
-                    json!({ "question_id": question_id, "asset_key": asset_key }).to_string(),
-                ))
+                .body(Body::from(body.to_string()))
                 .unwrap(),
         )
         .await
@@ -181,6 +210,68 @@ async fn lesson_returns_questions_without_answers() {
             .unwrap()
             .ends_with("/image"));
     }
+}
+
+#[tokio::test]
+async fn lesson_returns_text_options_for_text_questions() {
+    let seed = seed().await;
+    sqlx::query(
+        "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset,
+             options_text_json, correct_text)
+         VALUES (?, 4, 'q4', 'What is 1 + 1?', 'multiple_choice_text', '[]', '',
+             '[\"1\",\"2\",\"3\"]', '2')",
+    )
+    .bind(seed.sub1)
+    .execute(&seed.pool)
+    .await
+    .unwrap();
+
+    let (status, lesson) =
+        get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub1)).await;
+    assert_eq!(status, StatusCode::OK);
+    let questions = lesson["questions"].as_array().unwrap();
+    assert_eq!(questions.len(), 4);
+    let text_question = questions
+        .iter()
+        .find(|q| q["qtype"] == "multiple_choice_text")
+        .unwrap();
+    assert!(text_question.get("correct_text").is_none());
+    assert!(text_question.get("correct_asset").is_none());
+    let options = text_question["options"].as_array().unwrap();
+    assert_eq!(options.len(), 3);
+    assert_eq!(options[0]["text"], "1");
+    assert!(options[0]["asset_key"].is_null());
+    assert!(options[0]["image_url"].is_null());
+}
+
+#[tokio::test]
+async fn text_answers_checked_against_correct_text() {
+    let seed = seed().await;
+    let (text_id,): (i64,) = sqlx::query_as(
+        "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset,
+             options_text_json, correct_text)
+         VALUES (?, 4, 'q4', 'What is 1 + 1?', 'multiple_choice_text', '[]', '',
+             '[\"1\",\"2\",\"3\"]', '2')
+         RETURNING id",
+    )
+    .bind(seed.sub1)
+    .fetch_one(&seed.pool)
+    .await
+    .unwrap();
+
+    let (status, result) = answer_text(&seed.app, &seed.token, seed.sub1, text_id, "1").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result["correct"], false);
+    assert_eq!(result["correct_text"], "2");
+
+    let (status, result) = answer_text(&seed.app, &seed.token, seed.sub1, text_id, "2").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result["correct"], true);
+
+    // An asset key never answers a text question.
+    let (status, result) = answer(&seed.app, &seed.token, seed.sub1, text_id, "2").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result["correct"], false);
 }
 
 #[tokio::test]

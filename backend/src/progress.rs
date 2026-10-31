@@ -30,8 +30,9 @@ struct LessonWithSubject {
 
 #[derive(Debug, Serialize)]
 struct LessonOption {
-    asset_key: String,
-    image_url: String,
+    asset_key: Option<String>,
+    image_url: Option<String>,
+    text: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -57,7 +58,8 @@ struct Lesson {
 #[derive(Debug, Deserialize)]
 struct AnswerRequest {
     question_id: i64,
-    asset_key: String,
+    asset_key: Option<String>,
+    text: Option<String>,
 }
 
 /// XP for the first correct attempt of a question. Re-answering earns nothing.
@@ -67,6 +69,7 @@ const XP_PER_CORRECT: i64 = 10;
 struct AnswerResponse {
     correct: bool,
     correct_asset_key: String,
+    correct_text: String,
     xp_earned: i64,
     total_xp: i64,
 }
@@ -177,7 +180,8 @@ async fn get_lesson(
         assets.iter().map(|(id, key)| (key.as_str(), *id)).collect();
 
     let questions = sqlx::query_as::<_, Question>(
-        "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset
+        "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset,
+            options_text_json, correct_text
          FROM questions WHERE lesson_id = ? ORDER BY position",
     )
     .bind(sub.id)
@@ -186,16 +190,30 @@ async fn get_lesson(
 
     let mut lesson_questions = Vec::new();
     for question in questions {
-        let keys: Vec<String> = serde_json::from_str(&question.options_json).unwrap_or_default();
-        let options: Vec<LessonOption> = keys
-            .into_iter()
-            .filter_map(|key| {
-                asset_ids.get(key.as_str()).map(|asset_id| LessonOption {
-                    asset_key: key,
-                    image_url: format!("/assets/{asset_id}/image"),
+        let options: Vec<LessonOption> = if question.qtype == "multiple_choice_text" {
+            let texts: Vec<String> =
+                serde_json::from_str(&question.options_text_json).unwrap_or_default();
+            texts
+                .into_iter()
+                .map(|text| LessonOption {
+                    asset_key: None,
+                    image_url: None,
+                    text: Some(text),
                 })
-            })
-            .collect();
+                .collect()
+        } else {
+            let keys: Vec<String> =
+                serde_json::from_str(&question.options_json).unwrap_or_default();
+            keys.into_iter()
+                .filter_map(|key| {
+                    asset_ids.get(key.as_str()).map(|asset_id| LessonOption {
+                        asset_key: Some(key),
+                        image_url: Some(format!("/assets/{asset_id}/image")),
+                        text: None,
+                    })
+                })
+                .collect()
+        };
         if options.is_empty() {
             continue;
         }
@@ -231,7 +249,8 @@ async fn answer_question(
         return Err(locked());
     }
     let question = sqlx::query_as::<_, Question>(
-        "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset
+        "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset,
+            options_text_json, correct_text
          FROM questions WHERE id = ? AND lesson_id = ?",
     )
     .bind(input.question_id)
@@ -240,7 +259,13 @@ async fn answer_question(
     .await?
     .ok_or_else(|| AppError::NotFound("question not found".to_string()))?;
 
-    let correct = question.correct_asset == input.asset_key;
+    let correct = match question.qtype.as_str() {
+        "multiple_choice_text" => input.text.as_deref() == Some(question.correct_text.as_str()),
+        "multiple_choice_image" => {
+            input.asset_key.as_deref() == Some(question.correct_asset.as_str())
+        }
+        _ => false,
+    };
     let previously_correct: Option<i64> =
         sqlx::query_scalar("SELECT correct FROM progress WHERE user_id = ? AND question_id = ?")
             .bind(auth.0.id)
@@ -268,6 +293,7 @@ async fn answer_question(
     Ok(Json(AnswerResponse {
         correct,
         correct_asset_key: question.correct_asset,
+        correct_text: question.correct_text,
         xp_earned,
         total_xp: stats.xp,
     }))

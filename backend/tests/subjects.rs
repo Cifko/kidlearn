@@ -98,6 +98,27 @@ async fn create_validates_input() {
 }
 
 #[tokio::test]
+async fn create_stores_and_validates_grade() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+
+    let (status, created) = create_subject(&app, &token, json!({ "title": "No grade" })).await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert!(created["grade"].is_null());
+
+    let (status, created) =
+        create_subject(&app, &token, json!({ "title": "Graded", "grade": 2 })).await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["grade"], 2);
+
+    for bad in [0, 5, -1] {
+        let (status, _) =
+            create_subject(&app, &token, json!({ "title": "Bad grade", "grade": bad })).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+}
+
+#[tokio::test]
 async fn list_shows_public_but_hides_others_private() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;

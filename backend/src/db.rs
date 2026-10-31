@@ -24,6 +24,7 @@ const SCHEMA: &[&str] = &[
         lesson_count INTEGER NOT NULL DEFAULT 20,
         tags_json TEXT NOT NULL DEFAULT '[]',
         generated_lessons INTEGER NOT NULL DEFAULT 0,
+        grade INTEGER,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )",
     "CREATE TABLE IF NOT EXISTS lessons (
@@ -41,7 +42,9 @@ const SCHEMA: &[&str] = &[
         text TEXT NOT NULL,
         qtype TEXT NOT NULL,
         options_json TEXT NOT NULL,
-        correct_asset TEXT NOT NULL
+        correct_asset TEXT NOT NULL,
+        options_text_json TEXT NOT NULL DEFAULT '[]',
+        correct_text TEXT NOT NULL DEFAULT ''
     )",
     "CREATE TABLE IF NOT EXISTS assets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +105,9 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE subjects ADD COLUMN generated_lessons INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE assets ADD COLUMN image_blob BLOB",
     "ALTER TABLE assets ADD COLUMN image_mime TEXT",
+    "ALTER TABLE questions ADD COLUMN options_text_json TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE questions ADD COLUMN correct_text TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE subjects ADD COLUMN grade INTEGER",
 ];
 
 pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {

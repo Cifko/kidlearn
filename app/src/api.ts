@@ -21,6 +21,7 @@ export interface SubjectSummary {
   liked_by_me: boolean;
   tags: string[];
   generated_lessons: number;
+  grade: number | null;
   created_at: string;
 }
 
@@ -42,11 +43,13 @@ export interface CreateSubjectInput {
   language?: string;
   lesson_count?: number;
   tags?: string[];
+  grade?: number | null;
 }
 
 export interface LessonOption {
-  asset_key: string;
-  image_url: string;
+  asset_key: string | null;
+  image_url: string | null;
+  text: string | null;
 }
 
 export interface LessonQuestion {
@@ -70,6 +73,7 @@ export interface Lesson {
 export interface AnswerResult {
   correct: boolean;
   correct_asset_key: string;
+  correct_text: string;
   xp_earned: number;
   total_xp: number;
 }
@@ -175,11 +179,16 @@ export const api = {
     request<SubjectSummary>(`/subjects/${id}/like`, { method: 'DELETE', token }),
   lesson: (token: string, lessonId: number) =>
     request<Lesson>(`/lessons/${lessonId}`, { token }),
-  answer: (token: string, lessonId: number, question_id: number, asset_key: string) =>
+  answer: (
+    token: string,
+    lessonId: number,
+    question_id: number,
+    picked: { asset_key: string } | { text: string },
+  ) =>
     request<AnswerResult>(`/lessons/${lessonId}/answer`, {
       method: 'POST',
       token,
-      body: { question_id, asset_key },
+      body: { question_id, ...picked },
     }),
   subjectProgress: (token: string, id: number) =>
     request<SubjectProgress>(`/subjects/${id}/progress`, { token }),

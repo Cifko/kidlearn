@@ -40,6 +40,7 @@ struct SubjectRow {
     liked_by_me: bool,
     tags_json: String,
     generated_lessons: i64,
+    grade: Option<i64>,
     created_at: String,
 }
 
@@ -58,6 +59,7 @@ pub struct SubjectSummary {
     pub liked_by_me: bool,
     pub tags: Vec<String>,
     pub generated_lessons: i64,
+    pub grade: Option<i64>,
     pub created_at: String,
 }
 
@@ -78,6 +80,7 @@ impl From<SubjectRow> for SubjectSummary {
             liked_by_me: row.liked_by_me,
             tags,
             generated_lessons: row.generated_lessons,
+            grade: row.grade,
             created_at: row.created_at,
         }
     }
@@ -90,6 +93,7 @@ pub struct CreateSubject {
     pub language: Option<String>,
     pub lesson_count: Option<i64>,
     pub tags: Option<Vec<String>>,
+    pub grade: Option<i64>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -114,6 +118,7 @@ const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visib
     EXISTS(SELECT 1 FROM likes l WHERE l.subject_id = c.id AND l.user_id = ?1) AS liked_by_me,
     c.tags_json,
     c.generated_lessons,
+    c.grade,
     c.created_at
     FROM subjects c JOIN users u ON u.id = c.owner_id";
 
@@ -269,10 +274,19 @@ async fn create_subject(
     let description = input.description.unwrap_or_default();
     let tags = normalize_tags(input.tags.unwrap_or_default())?;
     let tags_json = serde_json::to_string(&tags).unwrap_or_else(|_| "[]".to_string());
+    let grade = match input.grade {
+        Some(g) if (1..=4).contains(&g) => Some(g),
+        Some(_) => {
+            return Err(AppError::BadRequest(
+                "grade must be between 1 and 4".to_string(),
+            ));
+        }
+        None => None,
+    };
 
     let (id,): (i64,) = sqlx::query_as(
-        "INSERT INTO subjects (owner_id, title, description, language, visibility, status, lesson_count, tags_json)
-         VALUES (?, ?, ?, ?, ?, 'ready', ?, ?) RETURNING id",
+        "INSERT INTO subjects (owner_id, title, description, language, visibility, status, lesson_count, tags_json, grade)
+         VALUES (?, ?, ?, ?, ?, 'ready', ?, ?, ?) RETURNING id",
     )
     .bind(auth.0.id)
     .bind(&title)
@@ -281,6 +295,7 @@ async fn create_subject(
     .bind("private")
     .bind(lesson_count)
     .bind(&tags_json)
+    .bind(grade)
     .fetch_one(&state.db)
     .await?;
 

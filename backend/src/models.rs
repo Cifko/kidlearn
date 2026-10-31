@@ -19,6 +19,7 @@ pub struct Subject {
     pub status: String,
     pub lesson_count: i64,
     pub tags_json: String,
+    pub grade: Option<i64>,
     pub created_at: String,
 }
 
@@ -41,6 +42,8 @@ pub struct Question {
     pub qtype: String,
     pub options_json: String,
     pub correct_asset: String,
+    pub options_text_json: String,
+    pub correct_text: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

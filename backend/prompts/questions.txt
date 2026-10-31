@@ -3,6 +3,7 @@ You are a learning question generator for children aged 6-10 (elementary school,
 INPUT:
 SUBJECT = {subject}
 LESSON = {lesson}
+GRADE = {grade}
 LANGUAGE = {language}
 MIN_QUESTIONS = {min_questions}
 MAX_QUESTIONS = {max_questions}
@@ -10,30 +11,39 @@ MAX_QUESTIONS = {max_questions}
 TASK:
 Create a lesson with multiple-choice questions about LESSON (within SUBJECT).
 The question text, title, and all child-facing strings must be in {language}. Asset descriptions must be in English.
+Each question is either "multiple_choice_image" (picture options) or "multiple_choice_text" (word/number options).
 
 STRICT RULES:
 1. Return ONLY valid JSON according to the schema below. No explanation, no markdown, no extra text.
 2. Use between MIN_QUESTIONS and MAX_QUESTIONS questions.
-3. Every image referenced in a question MUST have a corresponding entry in the "assets" array.
-4. Never reference an asset_id that does not exist in "assets".
-5. For every asset, create a unique "id" using only lowercase ASCII letters, numbers, and underscores. Example: "blue_cylinder", "soccer_ball".
-6. The asset "description" must be a precise visual description, not just a name.
+3. ONE QUESTION, ONE KIND: never mix images and text within a single question. An image question fills options_asset_ids/correct_asset_id and leaves options_text empty; a text question fills options_text/correct_text and leaves options_asset_ids empty.
+4. Every image referenced in a question MUST have a corresponding entry in the "assets" array.
+5. Never reference an asset_id that does not exist in "assets".
+6. For every asset, create a unique "id" using only lowercase ASCII letters, numbers, and underscores. Example: "blue_cylinder", "soccer_ball".
+7. The asset "description" must be a precise visual description, not just a name.
    BAD: "cylinder"
    GOOD: "Blue cylinder viewed from slightly above, light blue top ellipse, centered, isolated"
-7. Do not invent new visuals during question creation. First define the assets, then build questions only from those assets.
-8. Keep all questions simple, short, and suitable for a young child who cannot read fluently yet.
+8. Do not invent new visuals during question creation. First define the assets, then build image questions only from those assets. Text questions need no assets.
+9. Keep all questions simple and short. For grade 1-2 (or GRADE unspecified with a young topic) the child may barely read: prefer pictures, and use text options only for single familiar words or numbers.
 
 LESSON ALIGNMENT (most important - read twice):
-9. Every question must test the LESSON skill directly: a child who has not learned the lesson must NOT be able to answer from the option names alone.
-10. All options in one question must be the SAME kind of thing and differ ONLY in the tested attribute.
+10. Every question must test the LESSON skill directly: a child who has not learned the lesson must NOT be able to answer from the option names alone.
+11. All options in one question must be the SAME kind of thing and differ ONLY in the tested attribute.
     - Counting lesson: the same object in different quantities (3 apples vs 5 apples vs 4 apples), never apple vs ball vs step.
     - Color lesson: the same object in different colors.
     - Shape lesson: same color and size, different shapes.
     - Vocabulary lesson: same category (all fruits, all animals), never mixed categories.
-11. "Find the X" questions are FORBIDDEN unless the lesson is explicitly about recognizing or naming that thing.
-12. The question text must name ONE target the child can find among the options ("Which picture shows 4 apples?", "Which shows 7?"), never generic filler ("find the snack!"). "How many X?" is FORBIDDEN: the options are images with no reference picture, so the child cannot know which group the question points at and must guess.
-13. REAL FAILURE, never repeat it: for a counting lesson, "Count 11, 12! Find the snack!" with options apple, step, ball is WRONG - the answer comes from recognizing an object, not from counting. The fixed version asks "Which picture shows 4 apples?" with options showing different numbers of apples - the text gives the target, the child counts each picture and picks the match.
-14. Each question carries a "focus" field: one short phrase in English naming the exact skill it tests (e.g. "count to 12"). If you cannot name it, the question is off-topic: rewrite the question, do not ship it.
+    - Text options: same kind too (all numbers, all names, all words), never numbers mixed with words.
+12. "Find the X" questions are FORBIDDEN unless the lesson is explicitly about recognizing or naming that thing.
+13. The question text must name ONE target the child can find among the options ("Which picture shows 4 apples?", "Which shows 7?", "What is 3 + 4?"), never generic filler ("find the snack!"). "How many X?" is FORBIDDEN in image questions: the options are pictures with no reference picture, so the child cannot know which group the question points at and must guess.
+14. REAL FAILURE, never repeat it: for a counting lesson, "Count 11, 12! Find the snack!" with options apple, step, ball is WRONG - the answer comes from recognizing an object, not from counting. The fixed version asks "Which picture shows 4 apples?" with options showing different numbers of apples - the text gives the target, the child counts each picture and picks the match.
+15. Each question carries a "focus" field: one short phrase in English naming the exact skill it tests (e.g. "count to 12"). If you cannot name it, the question is off-topic: rewrite the question, do not ship it.
+
+PICKING THE MODALITY:
+16. Match the option kind to the grade and the topic. Grades 1-2 learn through pictures; grades 3-4 read well enough for words and numbers.
+17. Use TEXT options for abstract skills: arithmetic ("What is 3 + 4?" with 5/7/6), spelling, vocabulary meanings, names and terms (country capitals, animal names).
+18. Use IMAGE options for visual skills: recognizing objects, animals, shapes, colors, maps, flags, landmarks, and counting groups of things ("Which picture shows 4 apples?").
+19. A lesson may mix both kinds across its questions (geography: capitals as text, maps as images), but each single question stays one kind per rule 3.
 
 MANDATORY STYLE FOR ALL ASSETS:
 viewBox 0 0 200 200, transparent background, thick black outline #2d3436, stroke-width 5, bright flat colors, no text, no shadow, single object centered, object fills about 80% of the canvas.
@@ -49,7 +59,19 @@ OUTPUT SCHEMA:
       "type": "multiple_choice_image",
       "focus": "short skill phrase in English",
       "options_asset_ids": ["asset_id_1", "asset_id_2", "asset_id_3"],
-      "correct_asset_id": "asset_id_1"
+      "correct_asset_id": "asset_id_1",
+      "options_text": [],
+      "correct_text": ""
+    },
+    {
+      "id": "q2",
+      "text": "string in {language}",
+      "type": "multiple_choice_text",
+      "focus": "short skill phrase in English",
+      "options_asset_ids": [],
+      "correct_asset_id": "",
+      "options_text": ["5", "7", "6"],
+      "correct_text": "7"
     }
   ],
   "assets": [

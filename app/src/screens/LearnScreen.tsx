@@ -36,7 +36,13 @@ export function LearnScreen({
     setError(null);
     try {
       const data = await api.lesson(token, lessonId);
-      const urls = [...new Set(data.questions.flatMap((q) => q.options.map((o) => o.image_url)))];
+      const urls = [
+        ...new Set(
+          data.questions.flatMap((q) =>
+            q.options.flatMap((o) => (o.image_url ? [o.image_url] : [])),
+          ),
+        ),
+      ];
       const entries = await Promise.all(
         urls.map(async (url) => [url, await api.assetImage(token, url)] as const),
       );
@@ -65,14 +71,21 @@ export function LearnScreen({
     setError(null);
   }
 
-  async function pick(assetKey: string) {
+  async function pick(value: string) {
     if (picked || checking || !lesson) {
       return;
     }
-    setPicked(assetKey);
+    const question = lesson.questions[index];
+    const isText = question.options[0]?.text != null;
+    setPicked(value);
     setChecking(true);
     try {
-      const answer = await api.answer(token, lessonId, lesson.questions[index].id, assetKey);
+      const answer = await api.answer(
+        token,
+        lessonId,
+        question.id,
+        isText ? { text: value } : { asset_key: value },
+      );
       setResult(answer);
       if (answer.correct) {
         setScore((s) => s + 1);
@@ -108,6 +121,9 @@ export function LearnScreen({
   const total = lesson?.questions.length ?? 0;
   const progress = total === 0 ? 0 : (finished || failed ? total : index) / total;
   const over = finished || failed;
+  const current = lesson?.questions[index];
+  // The server guarantees one kind per question; the first option tells which.
+  const isTextQuestion = current != null && current.options[0]?.text != null;
 
   return (
     <Screen>
@@ -160,13 +176,17 @@ export function LearnScreen({
           <Text style={styles.subTitle}>{lesson.title}</Text>
           <Text style={styles.question}>{lesson.questions[index].text}</Text>
           <View style={styles.options}>
-            {lesson.questions[index].options.map((option) => {
-              const isPicked = picked === option.asset_key;
-              const isCorrect = result?.correct_asset_key === option.asset_key;
+            {lesson.questions[index].options.map((option, optionIndex) => {
+              const value = option.text ?? option.asset_key ?? '';
+              const correctValue = isTextQuestion
+                ? result?.correct_text
+                : result?.correct_asset_key;
+              const isPicked = picked === value;
+              const isCorrect = result != null && correctValue === value;
               return (
                 <TouchableOpacity
-                  key={option.asset_key}
-                  onPress={() => pick(option.asset_key)}
+                  key={option.text ?? option.asset_key ?? optionIndex}
+                  onPress={() => pick(value)}
                   disabled={picked !== null}
                   style={[
                     styles.option,
@@ -175,7 +195,9 @@ export function LearnScreen({
                     result && !isPicked && isCorrect && styles.optionCorrect,
                   ]}
                 >
-                  {images[option.image_url] ? (
+                  {option.text != null ? (
+                    <Text style={styles.optionText}>{option.text}</Text>
+                  ) : option.image_url != null && images[option.image_url] ? (
                     <Image
                       source={{ uri: images[option.image_url] }}
                       style={styles.optionImage}
@@ -317,6 +339,13 @@ const styles = StyleSheet.create({
     height: 110,
     borderRadius: 8,
     backgroundColor: colors.card,
+  },
+  optionText: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: colors.ink,
+    textAlign: 'center',
+    paddingHorizontal: 8,
   },
   feedback: {
     borderRadius: 16,

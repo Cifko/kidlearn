@@ -305,8 +305,8 @@ const LESSON_FIXTURE: &str = r##"{
     "questions": [
         {"id": "q1", "text": "Pick a", "type": "multiple_choice_image", "focus": "name object a",
          "options_asset_ids": ["a", "b"], "correct_asset_id": "a"},
-        {"id": "q2", "text": "Pick b", "type": "multiple_choice_image", "focus": "name object b",
-         "options_asset_ids": ["a", "b"], "correct_asset_id": "b"}
+        {"id": "q2", "text": "Pick two", "type": "multiple_choice_text", "focus": "read number 2",
+         "options_text": ["1", "2", "3"], "correct_text": "2"}
     ],
     "assets": [
         {"id": "a", "type": "real_object", "shape": null,

@@ -174,10 +174,39 @@ async fn live_generate_and_render_image() {
     assert_eq!(calls.len(), 1);
     assert!(calls[0]["response"].as_str().unwrap().contains("\"focus\""));
 
-    let (asset_id,): (i64,) = sqlx::query_as("SELECT id FROM assets LIMIT 1")
-        .fetch_one(&pool)
+    // Whatever mix the model produced, each option is exactly one kind.
+    let lesson_id = subs[0]["id"].as_i64().unwrap();
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/lessons/{lesson_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    let lesson: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    for question in lesson["questions"].as_array().unwrap() {
+        for option in question["options"].as_array().unwrap() {
+            let is_text = option["text"].is_string();
+            let is_image = option["image_url"].is_string();
+            assert!(is_text ^ is_image, "option mixes kinds: {option:?}");
+        }
+    }
+
+    let asset: Option<(i64,)> = sqlx::query_as("SELECT id FROM assets LIMIT 1")
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+    let Some((asset_id,)) = asset else {
+        eprintln!("model returned no image assets; skipping image check");
+        return;
+    };
     let response = app
         .oneshot(
             Request::get(format!("/assets/{asset_id}/image"))

@@ -72,6 +72,10 @@ struct LessonQuestion {
     options_asset_ids: Vec<String>,
     #[serde(default)]
     correct_asset_id: String,
+    #[serde(default)]
+    options_text: Vec<String>,
+    #[serde(default)]
+    correct_text: String,
 }
 
 #[derive(Debug, Deserialize, serde::Serialize)]
@@ -109,7 +113,7 @@ async fn generate_subject(
     };
 
     let subject = sqlx::query_as::<_, Subject>(
-        "SELECT id, owner_id, title, description, language, visibility, status, lesson_count, tags_json, created_at
+        "SELECT id, owner_id, title, description, language, visibility, status, lesson_count, tags_json, grade, created_at
          FROM subjects WHERE id = ? AND owner_id = ?",
     )
     .bind(id)
@@ -195,6 +199,7 @@ struct LessonJob {
     subject_id: i64,
     topic: String,
     language: String,
+    grade: Option<i64>,
     position: i64,
     item: PlanItem,
     min_questions: i64,
@@ -264,6 +269,7 @@ async fn run_lessons(
             subject_id: subject.id,
             topic: topic.clone(),
             language: subject.language.clone(),
+            grade: subject.grade,
             position,
             item,
             min_questions,
@@ -322,6 +328,7 @@ async fn generate_one_lesson(job: LessonJob) -> Result<(), AppError> {
                 &job.language,
                 job.min_questions,
                 job.max_questions,
+                job.grade,
             ),
             0.7,
         )
@@ -446,9 +453,13 @@ async fn store_lesson(
         position += 1;
         let options =
             serde_json::to_string(&question.options_asset_ids).unwrap_or_else(|_| "[]".to_string());
+        let (text_options, text_correct) = cleaned_text_options(question);
+        let options_text =
+            serde_json::to_string(&text_options).unwrap_or_else(|_| "[]".to_string());
         sqlx::query(
-            "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset,
+                 options_text_json, correct_text)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(lesson_id)
         .bind(position)
@@ -461,6 +472,8 @@ async fn store_lesson(
         .bind(question.qtype.as_str())
         .bind(options)
         .bind(question.correct_asset_id.as_str())
+        .bind(options_text)
+        .bind(text_correct)
         .execute(pool)
         .await?;
     }
@@ -468,17 +481,47 @@ async fn store_lesson(
 }
 
 fn valid_question(question: &LessonQuestion, asset_ids: &HashSet<&str>) -> bool {
-    !question.text.trim().is_empty()
-        && !question.focus.trim().is_empty()
-        && !question.options_asset_ids.is_empty()
-        && question
-            .options_asset_ids
-            .iter()
-            .all(|id| asset_ids.contains(id.as_str()))
-        && asset_ids.contains(question.correct_asset_id.as_str())
-        && question
-            .options_asset_ids
-            .contains(&question.correct_asset_id)
+    if question.text.trim().is_empty() || question.focus.trim().is_empty() {
+        return false;
+    }
+    match question.qtype.as_str() {
+        "multiple_choice_image" => {
+            !question.options_asset_ids.is_empty()
+                && question
+                    .options_asset_ids
+                    .iter()
+                    .all(|id| asset_ids.contains(id.as_str()))
+                && asset_ids.contains(question.correct_asset_id.as_str())
+                && question
+                    .options_asset_ids
+                    .contains(&question.correct_asset_id)
+        }
+        "multiple_choice_text" => {
+            let (options, correct) = cleaned_text_options(question);
+            valid_text_options(&options, &correct)
+        }
+        _ => false,
+    }
+}
+
+/// Trims text options for storage; empties are dropped.
+fn cleaned_text_options(question: &LessonQuestion) -> (Vec<String>, String) {
+    let options = question
+        .options_text
+        .iter()
+        .map(|option| option.trim().to_string())
+        .filter(|option| !option.is_empty())
+        .collect();
+    (options, question.correct_text.trim().to_string())
+}
+
+/// Text options must offer a real choice: at least two distinct answers,
+/// one of them the correct one.
+fn valid_text_options(options: &[String], correct: &str) -> bool {
+    options.len() >= 2
+        && !correct.is_empty()
+        && options.iter().any(|option| option == correct)
+        && options.iter().collect::<HashSet<_>>().len() == options.len()
 }
 
 /// One row of the asset lookup: spec, cached bytes, cached MIME,
@@ -533,4 +576,87 @@ fn image_response(bytes: Vec<u8>, mime: String) -> impl IntoResponse {
         .unwrap_or_else(|_| header::HeaderValue::from_static("application/octet-stream"));
     headers.insert(header::CONTENT_TYPE, value);
     (headers, bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assets() -> HashSet<&'static str> {
+        HashSet::from(["a", "b"])
+    }
+
+    fn image_question() -> LessonQuestion {
+        LessonQuestion {
+            id: "q1".to_string(),
+            text: "Which shows 2?".to_string(),
+            qtype: "multiple_choice_image".to_string(),
+            focus: "count to 2".to_string(),
+            options_asset_ids: vec!["a".to_string(), "b".to_string()],
+            correct_asset_id: "a".to_string(),
+            options_text: Vec::new(),
+            correct_text: String::new(),
+        }
+    }
+
+    fn text_question() -> LessonQuestion {
+        LessonQuestion {
+            id: "q1".to_string(),
+            text: "What is 1 + 1?".to_string(),
+            qtype: "multiple_choice_text".to_string(),
+            focus: "add to 2".to_string(),
+            options_asset_ids: Vec::new(),
+            correct_asset_id: String::new(),
+            options_text: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            correct_text: "2".to_string(),
+        }
+    }
+
+    #[test]
+    fn valid_questions_pass_per_type() {
+        assert!(valid_question(&image_question(), &assets()));
+        assert!(valid_question(&text_question(), &assets()));
+    }
+
+    #[test]
+    fn unknown_question_type_is_rejected() {
+        let mut question = text_question();
+        question.qtype = "multiple_choice".to_string();
+        assert!(!valid_question(&question, &assets()));
+    }
+
+    #[test]
+    fn image_questions_need_known_assets_and_focus() {
+        let mut question = image_question();
+        question.focus = String::new();
+        assert!(!valid_question(&question, &assets()));
+
+        let mut question = image_question();
+        question.correct_asset_id = "missing".to_string();
+        assert!(!valid_question(&question, &assets()));
+
+        let mut question = image_question();
+        question.options_asset_ids = vec!["a".to_string()];
+        question.correct_asset_id = "b".to_string();
+        assert!(!valid_question(&question, &assets()));
+    }
+
+    #[test]
+    fn text_questions_need_distinct_options_with_correct() {
+        let mut question = text_question();
+        question.options_text = vec!["2".to_string()];
+        assert!(!valid_question(&question, &assets()));
+
+        let mut question = text_question();
+        question.options_text = vec!["2".to_string(), "2".to_string()];
+        assert!(!valid_question(&question, &assets()));
+
+        let mut question = text_question();
+        question.correct_text = "9".to_string();
+        assert!(!valid_question(&question, &assets()));
+
+        let mut question = text_question();
+        question.options_text = vec!["2".to_string(), "  ".to_string()];
+        assert!(!valid_question(&question, &assets()));
+    }
 }
