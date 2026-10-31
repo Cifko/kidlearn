@@ -138,7 +138,9 @@ export function DetailScreen({
             </View>
           )}
           {detail.status === 'generating' && (
-            <Text style={styles.statusGenerating}>{t('generating')}</Text>
+            <Text style={styles.statusGenerating}>
+              {t('generatingShort')} ({detail.generated_lessons}/{detail.lesson_count})
+            </Text>
           )}
           {detail.status === 'failed' && <Text style={styles.statusFailed}>{t('failed')}</Text>}
           {!detail.mine ? (

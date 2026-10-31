@@ -132,7 +132,9 @@ export function HomeScreen({
             {subject.lesson_count} · ★ {subject.like_count}
           </Text>
           {subject.status === 'generating' && (
-            <Text style={styles.statusGenerating}>{t('generating')}</Text>
+            <Text style={styles.statusGenerating}>
+              {t('generatingShort')} ({subject.generated_lessons}/{subject.lesson_count})
+            </Text>
           )}
           {subject.status === 'failed' && <Text style={styles.statusFailed}>{t('failed')}</Text>}
         </TouchableOpacity>

@@ -120,6 +120,7 @@ async fn live_generate_and_render_svg() {
         }
     }
     assert_eq!(detail["status"], "ready");
+    assert_eq!(detail["generated_lessons"], 1);
     let subs = detail["lessons"].as_array().unwrap();
     assert_eq!(subs.len(), 1);
     let question_count = subs[0]["question_count"].as_i64().unwrap();

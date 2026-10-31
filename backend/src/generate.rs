@@ -1,4 +1,7 @@
 use std::collections::HashSet;
+use std::sync::Arc;
+
+use tokio::sync::Semaphore;
 
 use axum::{
     extract::{Path, State},
@@ -121,17 +124,19 @@ async fn generate_subject(
         ));
     }
 
-    sqlx::query("UPDATE subjects SET status = 'generating', lesson_count = ? WHERE id = ?")
-        .bind(count)
-        .bind(id)
-        .execute(&state.db)
-        .await?;
+    sqlx::query(
+        "UPDATE subjects SET status = 'generating', lesson_count = ?, generated_lessons = 0 WHERE id = ?",
+    )
+    .bind(count)
+    .bind(id)
+    .execute(&state.db)
+    .await?;
 
     // The job runs in this process; a restart abandons it as `generating`.
     // A durable queue comes later.
     let pool = state.db.clone();
     tokio::spawn(async move {
-        let outcome = run_generation(
+        let outcome = run_lessons(
             &pool,
             &client,
             &subject,
@@ -146,13 +151,32 @@ async fn generate_subject(
             .bind(subject.id)
             .execute(&pool)
             .await;
+        if outcome.is_ok() {
+            // Best effort: anything still missing renders on first view.
+            pregenerate_svgs(&pool, &client, subject.id).await;
+        }
     });
 
     let detail = subject_detail(&state.db, auth.0.id, id).await?;
     Ok((StatusCode::ACCEPTED, Json(detail)))
 }
 
-async fn run_generation(
+/// How many lesson generations (and later SVG renders) run at once.
+const FAN_OUT: usize = 5;
+
+struct LessonJob {
+    pool: sqlx::SqlitePool,
+    client: MetaClient,
+    subject_id: i64,
+    topic: String,
+    language: String,
+    position: i64,
+    item: PlanItem,
+    min_questions: i64,
+    max_questions: i64,
+}
+
+async fn run_lessons(
     pool: &sqlx::SqlitePool,
     client: &MetaClient,
     subject: &Subject,
@@ -184,43 +208,147 @@ async fn run_generation(
         .execute(pool)
         .await?;
 
-    for (index, item) in plan.lessons.iter().take(count as usize).enumerate() {
-        let title = item.title.trim();
-        if title.is_empty() {
-            continue;
-        }
-        let position = index as i64 + 1;
-        let (lesson_id,): (i64,) = sqlx::query_as(
-            "INSERT INTO lessons (subject_id, position, title, summary)
-             VALUES (?, ?, ?, ?) RETURNING id",
-        )
-        .bind(subject.id)
-        .bind(position)
-        .bind(title)
-        .bind(item.summary.trim())
-        .fetch_one(pool)
-        .await?;
+    let items: Vec<(i64, PlanItem)> = plan
+        .lessons
+        .into_iter()
+        .take(count as usize)
+        .enumerate()
+        .filter(|(_, item)| !item.title.trim().is_empty())
+        .map(|(index, item)| (index as i64 + 1, item))
+        .collect();
 
-        let lesson_topic = if item.summary.trim().is_empty() {
-            title.to_string()
-        } else {
-            format!("{}: {}", title, item.summary.trim())
+    let semaphore = Arc::new(Semaphore::new(FAN_OUT));
+    let mut handles = Vec::with_capacity(items.len());
+    for (position, item) in items {
+        let permit = semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| AppError::Internal("generation semaphore closed".to_string()))?;
+        let job = LessonJob {
+            pool: pool.clone(),
+            client: client.clone(),
+            subject_id: subject.id,
+            topic: topic.clone(),
+            language: subject.language.clone(),
+            position,
+            item,
+            min_questions,
+            max_questions,
         };
-        let lesson: LessonResponse = client
-            .chat_json(
-                &prompts::render_questions(
-                    &topic,
-                    &lesson_topic,
-                    &subject.language,
-                    min_questions,
-                    max_questions,
-                ),
-                0.7,
-            )
-            .await?;
-        store_lesson(pool, lesson_id, &lesson, max_questions as usize).await?;
+        handles.push(tokio::spawn(async move {
+            let _permit = permit;
+            generate_one_lesson(job).await
+        }));
+    }
+    for handle in handles {
+        handle
+            .await
+            .map_err(|err| AppError::Internal(format!("lesson task failed: {err}")))??;
     }
     Ok(())
+}
+
+async fn generate_one_lesson(job: LessonJob) -> Result<(), AppError> {
+    let title = job.item.title.trim().to_string();
+    let summary = job.item.summary.trim().to_string();
+    let (lesson_id,): (i64,) = sqlx::query_as(
+        "INSERT INTO lessons (subject_id, position, title, summary)
+         VALUES (?, ?, ?, ?) RETURNING id",
+    )
+    .bind(job.subject_id)
+    .bind(job.position)
+    .bind(&title)
+    .bind(&summary)
+    .fetch_one(&job.pool)
+    .await?;
+
+    let lesson_topic = if summary.is_empty() {
+        title
+    } else {
+        format!("{title}: {summary}")
+    };
+    let lesson: LessonResponse = job
+        .client
+        .chat_json(
+            &prompts::render_questions(
+                &job.topic,
+                &lesson_topic,
+                &job.language,
+                job.min_questions,
+                job.max_questions,
+            ),
+            0.7,
+        )
+        .await?;
+    store_lesson(
+        &job.pool,
+        lesson_id,
+        &lesson,
+        job.max_questions as usize,
+    )
+    .await?;
+    sqlx::query("UPDATE subjects SET generated_lessons = generated_lessons + 1 WHERE id = ?")
+        .bind(job.subject_id)
+        .execute(&job.pool)
+        .await?;
+    Ok(())
+}
+
+/// Renders every still-missing SVG so opening lessons is instant.
+/// Best effort: failures are ignored, the lazy path covers them.
+async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_id: i64) {
+    let assets: Vec<(i64, String)> = match sqlx::query_as(
+        "SELECT a.id, a.spec_json FROM assets a JOIN lessons s ON s.id = a.lesson_id
+         WHERE s.subject_id = ? AND a.svg_text IS NULL",
+    )
+    .bind(subject_id)
+    .fetch_all(pool)
+    .await
+    {
+        Ok(rows) => rows,
+        Err(err) => {
+            eprintln!("svg prefill lookup failed: {err}");
+            return;
+        }
+    };
+    let semaphore = Arc::new(Semaphore::new(FAN_OUT));
+    let mut handles = Vec::with_capacity(assets.len());
+    for (id, spec) in assets {
+        let Ok(permit) = semaphore.clone().acquire_owned().await else {
+            break;
+        };
+        let pool = pool.clone();
+        let client = client.clone();
+        handles.push(tokio::spawn(async move {
+            let _permit = permit;
+            let _ = render_and_store_svg(&pool, &client, id, &spec).await;
+        }));
+    }
+    for handle in handles {
+        let _ = handle.await;
+    }
+}
+
+/// Renders one SVG and caches it. `Ok(None)` means the model answered
+/// something that is not an SVG.
+async fn render_and_store_svg(
+    pool: &sqlx::SqlitePool,
+    client: &MetaClient,
+    asset_id: i64,
+    spec_json: &str,
+) -> Result<Option<String>, AppError> {
+    let svg = client.chat_text(&prompts::render_svg(spec_json)).await?;
+    let svg = svg.trim().to_string();
+    if !svg.starts_with("<svg") {
+        return Ok(None);
+    }
+    sqlx::query("UPDATE assets SET svg_text = ? WHERE id = ? AND svg_text IS NULL")
+        .bind(&svg)
+        .bind(asset_id)
+        .execute(pool)
+        .await?;
+    Ok(Some(svg))
 }
 
 async fn store_lesson(
@@ -315,18 +443,11 @@ async fn asset_svg(
             "META_API_KEY is not configured; image generation is disabled".to_string(),
         )
     })?;
-    let svg = client.chat_text(&prompts::render_svg(&spec_json)).await?;
-    let svg = svg.trim().to_string();
-    if !svg.starts_with("<svg") {
-        return Err(AppError::ServiceUnavailable(
-            "generation backend returned invalid SVG".to_string(),
-        ));
-    }
-    sqlx::query("UPDATE assets SET svg_text = ? WHERE id = ?")
-        .bind(&svg)
-        .bind(id)
-        .execute(&state.db)
-        .await?;
+    let svg = render_and_store_svg(&state.db, &client, id, &spec_json)
+        .await?
+        .ok_or_else(|| {
+            AppError::ServiceUnavailable("generation backend returned invalid SVG".to_string())
+        })?;
     Ok(svg_response(svg))
 }
 

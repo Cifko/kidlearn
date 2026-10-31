@@ -254,3 +254,105 @@ async fn generate_runs_in_background_and_reports_failure() {
     }
     assert_eq!(status, "failed");
 }
+
+async fn mock_lesson_backend(content: &str) -> (String, tokio::task::JoinHandle<()>) {
+    let content = content.to_string();
+    let app = axum::Router::new().route(
+        "/chat/completions",
+        axum::routing::post(move || {
+            let content = content.clone();
+            async move {
+                axum::Json(json!({
+                    "choices": [{ "message": { "content": content } }]
+                }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    (url, handle)
+}
+
+#[tokio::test]
+async fn generate_fans_out_and_tracks_progress() {
+    // One document serves both the plan and the lesson calls; each parser
+    // reads its own keys and ignores the rest.
+    let content = r##"{
+        "lessons": [
+            {"position": 1, "title": "L1", "summary": "first"},
+            {"position": 2, "title": "L2", "summary": "second"},
+            {"position": 3, "title": "L3", "summary": "third"}
+        ],
+        "questions": [
+            {"id": "q1", "text": "Pick a", "type": "multiple_choice_image",
+             "options_asset_ids": ["a", "b"], "correct_asset_id": "a"},
+            {"id": "q2", "text": "Pick b", "type": "multiple_choice_image",
+             "options_asset_ids": ["a", "b"], "correct_asset_id": "b"}
+        ],
+        "assets": [
+            {"id": "a", "type": "real_object", "shape": null,
+             "description": "A red ball", "main_color": "#ff0000", "secondary_color": "#ff8888"},
+            {"id": "b", "type": "real_object", "shape": null,
+             "description": "A blue cube", "main_color": "#0000ff", "secondary_color": "#8888ff"}
+        ]
+    }"##;
+    let (url, _server) = mock_lesson_backend(content).await;
+    let mut config = Config::for_tests();
+    config.meta_api_key = Some("test-key".to_string());
+    config.meta_api_base = url;
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    let app = create_app(AppState::new(pool, config));
+    let token = login_token(&app).await;
+    let id = create_subject_id(&app, &token).await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post(format!("/subjects/{id}/generate"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "lesson_count": 3, "min_questions": 1, "max_questions": 2 })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+
+    let mut detail = serde_json::Value::Null;
+    for _ in 0..100 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/subjects/{id}"))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap();
+        detail = serde_json::from_slice(&body).unwrap();
+        if detail["status"] != "generating" {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(detail["status"], "ready");
+    assert_eq!(detail["generated_lessons"], 3);
+    let lessons = detail["lessons"].as_array().unwrap();
+    assert_eq!(lessons.len(), 3);
+    for (index, lesson) in lessons.iter().enumerate() {
+        assert_eq!(lesson["position"], (index + 1) as i64);
+        assert_eq!(lesson["question_count"], 2);
+    }
+}

@@ -33,6 +33,7 @@ struct SubjectRow {
     like_count: i64,
     liked_by_me: bool,
     tags_json: String,
+    generated_lessons: i64,
     created_at: String,
 }
 
@@ -50,6 +51,7 @@ pub struct SubjectSummary {
     pub like_count: i64,
     pub liked_by_me: bool,
     pub tags: Vec<String>,
+    pub generated_lessons: i64,
     pub created_at: String,
 }
 
@@ -69,6 +71,7 @@ impl From<SubjectRow> for SubjectSummary {
             like_count: row.like_count,
             liked_by_me: row.liked_by_me,
             tags,
+            generated_lessons: row.generated_lessons,
             created_at: row.created_at,
         }
     }
@@ -105,6 +108,7 @@ const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visib
     (SELECT COUNT(*) FROM likes l WHERE l.subject_id = c.id) AS like_count,
     EXISTS(SELECT 1 FROM likes l WHERE l.subject_id = c.id AND l.user_id = ?1) AS liked_by_me,
     c.tags_json,
+    c.generated_lessons,
     c.created_at
     FROM subjects c JOIN users u ON u.id = c.owner_id";
 

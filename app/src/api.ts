@@ -20,6 +20,7 @@ export interface SubjectSummary {
   like_count: number;
   liked_by_me: boolean;
   tags: string[];
+  generated_lessons: number;
   created_at: string;
 }
 
