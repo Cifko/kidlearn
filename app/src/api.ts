@@ -46,7 +46,7 @@ export interface CreateSubjectInput {
 
 export interface LessonOption {
   asset_key: string;
-  svg_url: string;
+  image_url: string;
 }
 
 export interface LessonQuestion {
@@ -197,13 +197,27 @@ export const api = {
     const query = search.toString();
     return request<LlmCall[]>(`/debug/llm-calls${query ? `?${query}` : ''}`, { token });
   },
-  assetSvg: async (token: string, path: string): Promise<string> => {
+  assetImage: async (token: string, path: string): Promise<string> => {
     const response = await fetch(`${API_URL}${path}`, {
       headers: { authorization: `Bearer ${token}` },
     });
     if (!response.ok) {
       throw new ApiError(response.status, `Image failed (${response.status})`);
     }
-    return response.text();
+    // Images need the auth header, so they cannot be hot-linked: fetch the
+    // bytes and hand the UI a data URI. Works on web and native.
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new ApiError(response.status, 'Image failed'));
+        }
+      };
+      reader.onerror = () => reject(new ApiError(response.status, 'Image failed'));
+      reader.readAsDataURL(blob);
+    });
   },
 };

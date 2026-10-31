@@ -5,7 +5,7 @@ import { useLang } from '../i18n';
 import { colors } from '../theme';
 import { ErrorBox, Screen, Segmented } from '../ui';
 
-type KindFilter = 'all' | 'plan' | 'questions' | 'svg' | 'search';
+type KindFilter = 'all' | 'plan' | 'questions' | 'image' | 'search';
 
 const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 
@@ -48,7 +48,7 @@ export function PromptsScreen({ token, onBack }: { token: string; onBack: () => 
             { value: 'all', label: t('all') },
             { value: 'plan', label: 'plan' },
             { value: 'questions', label: 'questions' },
-            { value: 'svg', label: 'svg' },
+            { value: 'image', label: 'image' },
             { value: 'search', label: 'search' },
           ]}
           value={filter}

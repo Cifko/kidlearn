@@ -14,7 +14,7 @@ Duolingo-style multiple-choice questions, with pictures.
    "prvouka").
 3. The backend asks the Meta Model API (`api.meta.ai`) for N lessons (default 20,
    configurable) in pedagogical order, then generates 5–10 questions per
-   lesson. Questions reference image assets; SVGs are generated on demand.
+   lesson. Questions reference image assets; pictures are generated on demand.
 4. The kid opens a subject, sees the ordered lessons, and learns
    through them with Duolingo-like progress tracking.
 5. Every AI call's prompt and answer is stored; open "AI prompts" from
@@ -25,7 +25,7 @@ Duolingo-style multiple-choice questions, with pictures.
 - `backend/` — Rust (Axum) API: auth, subjects, Meta AI generation, SQLite.
 - `app/` — Expo (React Native + Web) client from one codebase: web app and
   native mobile apps.
-- `backend/prompts/` — LLM prompt templates (planner, questions, SVG art).
+- `backend/prompts/` — prompt templates (planner, questions, pictures).
 
 ## Quickstart
 

@@ -6,6 +6,7 @@ pub struct Config {
     pub meta_api_base: String,
     pub meta_api_key: Option<String>,
     pub meta_model: String,
+    pub meta_image_model: String,
     pub google_client_id: Option<String>,
     pub google_tokeninfo_url: String,
 }
@@ -22,6 +23,7 @@ impl Config {
                 .ok()
                 .filter(|v| !v.trim().is_empty()),
             meta_model: env_or("META_MODEL", "muse-spark-1.3"),
+            meta_image_model: env_or("META_IMAGE_MODEL", "muse-image-1.0"),
             google_client_id: std::env::var("GOOGLE_CLIENT_ID")
                 .ok()
                 .filter(|v| !v.trim().is_empty()),
@@ -41,6 +43,7 @@ impl Config {
             meta_api_base: "http://localhost:1".to_string(),
             meta_api_key: None,
             meta_model: "test-model".to_string(),
+            meta_image_model: "test-image-model".to_string(),
             google_client_id: None,
             google_tokeninfo_url: "http://localhost:1".to_string(),
         }

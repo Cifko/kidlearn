@@ -1,6 +1,6 @@
 const PLAN: &str = include_str!("../prompts/plan.txt");
 const QUESTIONS: &str = include_str!("../prompts/questions.txt");
-const SVG: &str = include_str!("../prompts/svg.txt");
+const IMAGE: &str = include_str!("../prompts/image.txt");
 const SEARCH: &str = include_str!("../prompts/search.txt");
 
 pub fn render_plan(subject: &str, language: &str, count: i64) -> String {
@@ -24,8 +24,8 @@ pub fn render_questions(
         .replace("{max_questions}", &max_questions.to_string())
 }
 
-pub fn render_svg(asset_json: &str) -> String {
-    SVG.replace("{asset_json}", asset_json)
+pub fn render_image(asset_json: &str) -> String {
+    IMAGE.replace("{asset_json}", asset_json)
 }
 
 pub fn render_search(query: &str, subjects_json: &str, max_results: i64) -> String {
@@ -75,9 +75,10 @@ mod tests {
     }
 
     #[test]
-    fn svg_prompt_embeds_asset_spec() {
-        let prompt = render_svg(r#"{"id":"red_ball"}"#);
+    fn image_prompt_embeds_asset_spec() {
+        let prompt = render_image(r#"{"id":"red_ball"}"#);
         assert!(prompt.contains(r#"{"id":"red_ball"}"#));
+        assert!(prompt.contains("children's school books"));
         assert!(!prompt.contains("{asset_json}"));
     }
 

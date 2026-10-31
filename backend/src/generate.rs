@@ -26,7 +26,7 @@ use crate::{
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/subjects/{id}/generate", post(generate_subject))
-        .route("/assets/{id}/svg", get(asset_svg))
+        .route("/assets/{id}/image", get(asset_image))
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -168,7 +168,7 @@ async fn generate_subject(
                         .await;
                     tracing::info!("generation ready");
                     // Best effort: anything still missing renders on first view.
-                    pregenerate_svgs(&pool, &client, subject.id).await;
+                    pregenerate_images(&pool, &client, subject.id).await;
                 }
                 Err(err) => {
                     let _ = sqlx::query("UPDATE subjects SET status = 'failed' WHERE id = ?")
@@ -186,7 +186,7 @@ async fn generate_subject(
     Ok((StatusCode::ACCEPTED, Json(detail)))
 }
 
-/// How many lesson generations (and later SVG renders) run at once.
+/// How many lesson generations (and later image renders) run at once.
 const FAN_OUT: usize = 5;
 
 struct LessonJob {
@@ -335,13 +335,13 @@ async fn generate_one_lesson(job: LessonJob) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Renders every still-missing SVG so opening lessons is instant.
+/// Renders every still-missing image so opening lessons is instant.
 /// Best effort: failures are ignored, the lazy path covers them.
-async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_id: i64) {
+async fn pregenerate_images(pool: &sqlx::SqlitePool, client: &MetaClient, subject_id: i64) {
     let assets: Vec<(i64, String, i64, String)> = match sqlx::query_as(
         "SELECT a.id, a.asset_key, a.lesson_id, a.spec_json FROM assets a
          JOIN lessons s ON s.id = a.lesson_id
-         WHERE s.subject_id = ? AND a.svg_text IS NULL",
+         WHERE s.subject_id = ? AND a.image_blob IS NULL",
     )
     .bind(subject_id)
     .fetch_all(pool)
@@ -349,14 +349,14 @@ async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_
     {
         Ok(rows) => rows,
         Err(err) => {
-            tracing::error!(%err, "svg prefill lookup failed");
+            tracing::error!(%err, "image prefill lookup failed");
             return;
         }
     };
     if assets.is_empty() {
         return;
     }
-    tracing::info!(missing = assets.len(), "svg prefill started");
+    tracing::info!(missing = assets.len(), "image prefill started");
     let total = assets.len();
     let semaphore = Arc::new(Semaphore::new(FAN_OUT));
     let mut handles = Vec::with_capacity(total);
@@ -367,7 +367,7 @@ async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_
         let pool = pool.clone();
         let client = client.clone();
         let ctx = CallContext {
-            kind: "svg",
+            kind: "image",
             subject_id: Some(subject_id),
             lesson_id: Some(lesson_id),
             asset_id: Some(id),
@@ -375,41 +375,39 @@ async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_
         };
         handles.push(tokio::spawn(async move {
             let _permit = permit;
-            render_and_store_svg(&pool, &client, &ctx, id, &spec).await
+            render_and_store_image(&pool, &client, &ctx, id, &spec).await
         }));
     }
     let mut failed = 0;
     for handle in handles {
         match handle.await {
-            Ok(Ok(Some(_))) => {}
+            Ok(Ok(_)) => {}
             _ => failed += 1,
         }
     }
-    tracing::info!(rendered = total - failed, failed, "svg prefill done");
+    tracing::info!(rendered = total - failed, failed, "image prefill done");
 }
 
-/// Renders one SVG and caches it. `Ok(None)` means the model answered
-/// something that is not an SVG.
-async fn render_and_store_svg(
+/// Renders one image and caches its bytes.
+async fn render_and_store_image(
     pool: &sqlx::SqlitePool,
     client: &MetaClient,
     ctx: &CallContext,
     asset_id: i64,
     spec_json: &str,
-) -> Result<Option<String>, AppError> {
-    let svg = client
-        .chat_text(ctx, &prompts::render_svg(spec_json))
+) -> Result<(Vec<u8>, String), AppError> {
+    let (bytes, mime) = client
+        .generate_image(ctx, &prompts::render_image(spec_json))
         .await?;
-    let svg = svg.trim().to_string();
-    if !svg.starts_with("<svg") {
-        return Ok(None);
-    }
-    sqlx::query("UPDATE assets SET svg_text = ? WHERE id = ? AND svg_text IS NULL")
-        .bind(&svg)
-        .bind(asset_id)
-        .execute(pool)
-        .await?;
-    Ok(Some(svg))
+    sqlx::query(
+        "UPDATE assets SET image_blob = ?, image_mime = ? WHERE id = ? AND image_blob IS NULL",
+    )
+    .bind(&bytes)
+    .bind(&mime)
+    .bind(asset_id)
+    .execute(pool)
+    .await?;
+    Ok((bytes, mime))
 }
 
 async fn store_lesson(
@@ -483,26 +481,30 @@ fn valid_question(question: &LessonQuestion, asset_ids: &HashSet<&str>) -> bool 
             .contains(&question.correct_asset_id)
 }
 
-/// Serves an asset's SVG, generating and caching it on first request.
-async fn asset_svg(
+/// One row of the asset lookup: spec, cached bytes, cached MIME,
+/// asset key, lesson id, subject id.
+type AssetRow = (String, Option<Vec<u8>>, Option<String>, String, i64, i64);
+
+/// Serves an asset's image, generating and caching it on first request.
+async fn asset_image(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<impl IntoResponse, AppError> {
-    let row: Option<(String, Option<String>, String, i64, i64)> = sqlx::query_as(
-        "SELECT a.spec_json, a.svg_text, a.asset_key, s.id, c.id FROM assets a
-         JOIN lessons s ON s.id = a.lesson_id
-         JOIN subjects c ON c.id = s.subject_id
-         WHERE a.id = ? AND (c.visibility = 'public' OR c.owner_id = ?)",
+    let row: Option<AssetRow> = sqlx::query_as(
+        "SELECT a.spec_json, a.image_blob, a.image_mime, a.asset_key, s.id, c.id FROM assets a
+             JOIN lessons s ON s.id = a.lesson_id
+             JOIN subjects c ON c.id = s.subject_id
+             WHERE a.id = ? AND (c.visibility = 'public' OR c.owner_id = ?)",
     )
     .bind(id)
     .bind(auth.0.id)
     .fetch_optional(&state.db)
     .await?;
-    let (spec_json, cached, key, lesson_id, subject_id) =
+    let (spec_json, cached_blob, cached_mime, key, lesson_id, subject_id) =
         row.ok_or_else(|| AppError::NotFound("asset not found".to_string()))?;
-    if let Some(svg) = cached {
-        return Ok(svg_response(svg));
+    if let (Some(blob), Some(mime)) = (cached_blob, cached_mime) {
+        return Ok(image_response(blob, mime));
     }
 
     let Some(client) = MetaClient::from_config(&state.config)
@@ -514,21 +516,21 @@ async fn asset_svg(
         ));
     };
     let ctx = CallContext {
-        kind: "svg",
+        kind: "image",
         subject_id: Some(subject_id),
         lesson_id: Some(lesson_id),
         asset_id: Some(id),
         label: key,
     };
-    let svg = render_and_store_svg(&state.db, &client, &ctx, id, &spec_json)
-        .await?
-        .ok_or_else(|| {
-            tracing::warn!(asset_id = id, "generation backend returned invalid SVG");
-            AppError::ServiceUnavailable("generation backend returned invalid SVG".to_string())
-        })?;
-    Ok(svg_response(svg))
+    let (bytes, mime) = render_and_store_image(&state.db, &client, &ctx, id, &spec_json).await?;
+    Ok(image_response(bytes, mime))
 }
 
-fn svg_response(svg: String) -> impl IntoResponse {
-    ([(header::CONTENT_TYPE, "image/svg+xml")], svg)
+fn image_response(bytes: Vec<u8>, mime: String) -> impl IntoResponse {
+    let mut headers = header::HeaderMap::new();
+    let value = mime
+        .parse()
+        .unwrap_or_else(|_| header::HeaderValue::from_static("application/octet-stream"));
+    headers.insert(header::CONTENT_TYPE, value);
+    (headers, bytes)
 }

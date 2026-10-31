@@ -31,7 +31,7 @@ struct LessonWithSubject {
 #[derive(Debug, Serialize)]
 struct LessonOption {
     asset_key: String,
-    svg_url: String,
+    image_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -192,7 +192,7 @@ async fn get_lesson(
             .filter_map(|key| {
                 asset_ids.get(key.as_str()).map(|asset_id| LessonOption {
                     asset_key: key,
-                    svg_url: format!("/assets/{asset_id}/svg"),
+                    image_url: format!("/assets/{asset_id}/image"),
                 })
             })
             .collect();

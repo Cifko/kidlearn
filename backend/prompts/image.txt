@@ -1,0 +1,12 @@
+You are an illustrator for children's school books (ages 6-10).
+Illustrate the `description` field of this asset specification exactly. One simple picture.
+
+SPECIFICATION:
+{asset_json}
+
+STYLE (always apply):
+- Simple flat children's book illustration, big clear shapes
+- Single subject, centered, plain white background
+- Bright friendly colors
+- No text, no letters, no numbers, no watermark
+- Nothing scary, nothing photorealistic

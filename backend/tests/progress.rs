@@ -172,11 +172,14 @@ async fn lesson_returns_questions_without_answers() {
         let options = question["options"].as_array().unwrap();
         assert_eq!(options.len(), 3);
         assert_eq!(options[0]["asset_key"], "red_ball");
-        assert!(options[0]["svg_url"]
+        assert!(options[0]["image_url"]
             .as_str()
             .unwrap()
             .starts_with("/assets/"));
-        assert!(options[0]["svg_url"].as_str().unwrap().ends_with("/svg"));
+        assert!(options[0]["image_url"]
+            .as_str()
+            .unwrap()
+            .ends_with("/image"));
     }
 }
 

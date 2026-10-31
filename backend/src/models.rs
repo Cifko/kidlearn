@@ -49,5 +49,6 @@ pub struct Asset {
     pub lesson_id: i64,
     pub asset_key: String,
     pub spec_json: String,
-    pub svg_text: Option<String>,
+    pub image_blob: Option<Vec<u8>>,
+    pub image_mime: Option<String>,
 }

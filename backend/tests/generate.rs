@@ -115,7 +115,7 @@ async fn generate_rejects_non_owner() {
 }
 
 #[tokio::test]
-async fn svg_serves_cached_image() {
+async fn image_serves_cached_bytes() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;
     let subject_id = create_subject_id(&app, &token).await;
@@ -127,19 +127,20 @@ async fn svg_serves_cached_image() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    let svg = r#"<svg viewBox="0 0 200 200"></svg>"#;
+    let png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00];
     let (asset_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO assets (lesson_id, asset_key, spec_json, svg_text) VALUES (?, 'red_ball', '{}', ?) RETURNING id",
+        "INSERT INTO assets (lesson_id, asset_key, spec_json, image_blob, image_mime)
+         VALUES (?, 'red_ball', '{}', ?, 'image/png') RETURNING id",
     )
     .bind(sub_id)
-    .bind(svg)
+    .bind(&png)
     .fetch_one(&pool)
     .await
     .unwrap();
 
     let response = app
         .oneshot(
-            Request::get(format!("/assets/{asset_id}/svg"))
+            Request::get(format!("/assets/{asset_id}/image"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -147,20 +148,20 @@ async fn svg_serves_cached_image() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()["content-type"], "image/svg+xml");
+    assert_eq!(response.headers()["content-type"], "image/png");
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
         .unwrap();
-    assert_eq!(body.as_ref(), svg.as_bytes());
+    assert_eq!(body.as_ref(), png.as_slice());
 }
 
 #[tokio::test]
-async fn svg_missing_asset_returns_404() {
+async fn image_missing_asset_returns_404() {
     let (_pool, app) = test_state().await;
     let token = login_token(&app).await;
     let response = app
         .oneshot(
-            Request::get("/assets/999/svg")
+            Request::get("/assets/999/image")
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -171,7 +172,7 @@ async fn svg_missing_asset_returns_404() {
 }
 
 #[tokio::test]
-async fn svg_uncached_without_key_reports_disabled() {
+async fn image_uncached_without_key_reports_disabled() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;
     let subject_id = create_subject_id(&app, &token).await;
@@ -192,7 +193,7 @@ async fn svg_uncached_without_key_reports_disabled() {
 
     let response = app
         .oneshot(
-            Request::get(format!("/assets/{asset_id}/svg"))
+            Request::get(format!("/assets/{asset_id}/image"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -251,19 +252,30 @@ async fn generate_runs_in_background_and_reports_failure() {
     assert_eq!(status, "failed");
 }
 
+/// A 1x1 transparent PNG, base64-encoded.
+const PIXEL_PNG_B64: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
 async fn mock_lesson_backend(content: &str) -> (String, tokio::task::JoinHandle<()>) {
     let content = content.to_string();
-    let app = axum::Router::new().route(
-        "/chat/completions",
-        axum::routing::post(move || {
-            let content = content.clone();
-            async move {
-                axum::Json(json!({
-                    "choices": [{ "message": { "content": content } }]
-                }))
-            }
-        }),
-    );
+    let app = axum::Router::new()
+        .route(
+            "/chat/completions",
+            axum::routing::post(move || {
+                let content = content.clone();
+                async move {
+                    axum::Json(json!({
+                        "choices": [{ "message": { "content": content } }]
+                    }))
+                }
+            }),
+        )
+        .route(
+            "/images/generations",
+            axum::routing::post(|| async {
+                axum::Json(json!({ "data": [{ "b64_json": PIXEL_PNG_B64 }] }))
+            }),
+        );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     let handle = tokio::spawn(async move {
@@ -459,20 +471,24 @@ async fn generate_records_prompts_and_answers() {
         .unwrap()
         .contains("Pick a"));
 
-    // SVG prefill runs after the subject flips to ready.
+    // Image prefill runs after the subject flips to ready.
     for _ in 0..100 {
-        let svgs = list_calls(&app, &token, "?kind=svg").await;
-        if svgs.as_array().unwrap().len() == 4 {
-            assert!(svgs[0]["prompt"]
+        let images = list_calls(&app, &token, "?kind=image").await;
+        if images.as_array().unwrap().len() == 4 {
+            assert!(images[0]["prompt"]
                 .as_str()
                 .unwrap()
-                .contains("SVG image generator"));
-            assert!(svgs[0]["asset_id"].as_i64().unwrap() > 0);
+                .contains("children's school books"));
+            assert!(images[0]["asset_id"].as_i64().unwrap() > 0);
+            // Pixels stay out of the log; only a summary is recorded.
+            let summary = images[0]["response"].as_str().unwrap();
+            assert!(summary.contains("image/png"), "summary: {summary}");
+            assert!(summary.contains("bytes"), "summary: {summary}");
             return;
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    panic!("svg prefill calls were not recorded in time");
+    panic!("image prefill calls were not recorded in time");
 }
 
 #[tokio::test]

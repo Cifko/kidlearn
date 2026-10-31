@@ -48,7 +48,8 @@ const SCHEMA: &[&str] = &[
         lesson_id INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
         asset_key TEXT NOT NULL,
         spec_json TEXT NOT NULL,
-        svg_text TEXT,
+        image_blob BLOB,
+        image_mime TEXT,
         UNIQUE (lesson_id, asset_key)
     )",
     "CREATE TABLE IF NOT EXISTS progress (
@@ -99,6 +100,8 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE assets RENAME COLUMN subcategory_id TO lesson_id",
     "ALTER TABLE subjects ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE subjects ADD COLUMN generated_lessons INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE assets ADD COLUMN image_blob BLOB",
+    "ALTER TABLE assets ADD COLUMN image_mime TEXT",
 ];
 
 pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {

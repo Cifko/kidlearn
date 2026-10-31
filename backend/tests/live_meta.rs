@@ -20,6 +20,7 @@ fn live_config() -> Option<Config> {
         meta_api_base: from_env.meta_api_base,
         meta_api_key: from_env.meta_api_key,
         meta_model: from_env.meta_model,
+        meta_image_model: from_env.meta_image_model,
         ..Config::for_tests()
     })
 }
@@ -43,7 +44,7 @@ async fn login_token(app: &axum::Router) -> String {
 }
 
 #[tokio::test]
-async fn live_generate_and_render_svg() {
+async fn live_generate_and_render_image() {
     let Some(config) = live_config() else {
         eprintln!("META_API_KEY not set; skipping live test");
         return;
@@ -179,7 +180,7 @@ async fn live_generate_and_render_svg() {
         .unwrap();
     let response = app
         .oneshot(
-            Request::get(format!("/assets/{asset_id}/svg"))
+            Request::get(format!("/assets/{asset_id}/image"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -187,20 +188,35 @@ async fn live_generate_and_render_svg() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()["content-type"], "image/svg+xml");
-    let body = axum::body::to_bytes(response.into_body(), 65536)
-        .await
-        .unwrap();
-    let svg = String::from_utf8(body.to_vec()).unwrap();
+    let content_type = response.headers()["content-type"]
+        .to_str()
+        .unwrap()
+        .to_string();
     assert!(
-        svg.starts_with("<svg"),
-        "SVG did not start with <svg: {}",
-        svg.chars().take(80).collect::<String>()
+        content_type.starts_with("image/"),
+        "unexpected content type: {content_type}"
     );
-    let (cached,): (Option<String>,) = sqlx::query_as("SELECT svg_text FROM assets WHERE id = ?")
-        .bind(asset_id)
-        .fetch_one(&pool)
+    let body = axum::body::to_bytes(response.into_body(), 8 * 1024 * 1024)
         .await
         .unwrap();
-    assert!(cached.is_some_and(|s| s.starts_with("<svg")));
+    assert!(!body.is_empty());
+    assert!(
+        is_image_magic(&body),
+        "bytes are not a known image format: {:02x?}",
+        &body[..body.len().min(12)]
+    );
+    let (cached,): (Option<Vec<u8>>,) =
+        sqlx::query_as("SELECT image_blob FROM assets WHERE id = ?")
+            .bind(asset_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(cached.is_some_and(|bytes| is_image_magic(&bytes)));
+}
+
+fn is_image_magic(bytes: &[u8]) -> bool {
+    (bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP")
+        || bytes.starts_with(&[0x89, b'P', b'N', b'G'])
+        || bytes.starts_with(&[0xFF, 0xD8, 0xFF])
+        || bytes.starts_with(b"GIF8")
 }

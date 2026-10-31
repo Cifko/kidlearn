@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SvgXml } from 'react-native-svg';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { api, ApiError, AnswerResult, Lesson } from '../api';
 import { useLang } from '../i18n';
 import { colors } from '../theme';
@@ -19,7 +18,7 @@ export function LearnScreen({
 }) {
   const { t } = useLang();
   const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [svgs, setSvgs] = useState<Record<string, string>>({});
+  const [images, setImages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
@@ -37,12 +36,12 @@ export function LearnScreen({
     setError(null);
     try {
       const data = await api.lesson(token, lessonId);
-      const urls = [...new Set(data.questions.flatMap((q) => q.options.map((o) => o.svg_url)))];
+      const urls = [...new Set(data.questions.flatMap((q) => q.options.map((o) => o.image_url)))];
       const entries = await Promise.all(
-        urls.map(async (url) => [url, await api.assetSvg(token, url)] as const),
+        urls.map(async (url) => [url, await api.assetImage(token, url)] as const),
       );
       setLesson(data);
-      setSvgs(Object.fromEntries(entries));
+      setImages(Object.fromEntries(entries));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load');
     } finally {
@@ -176,10 +175,13 @@ export function LearnScreen({
                     result && !isPicked && isCorrect && styles.optionCorrect,
                   ]}
                 >
-                  {svgs[option.svg_url] ? (
-                    <SvgXml xml={svgs[option.svg_url]} width={110} height={110} />
+                  {images[option.image_url] ? (
+                    <Image
+                      source={{ uri: images[option.image_url] }}
+                      style={styles.optionImage}
+                    />
                   ) : (
-                    <View style={styles.svgMissing} />
+                    <View style={styles.optionImage} />
                   )}
                 </TouchableOpacity>
               );
@@ -310,7 +312,7 @@ const styles = StyleSheet.create({
     borderColor: colors.red,
     backgroundColor: '#FFE5E5',
   },
-  svgMissing: {
+  optionImage: {
     width: 110,
     height: 110,
     borderRadius: 8,
