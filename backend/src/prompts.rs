@@ -1,6 +1,7 @@
 const PLAN: &str = include_str!("../prompts/plan.txt");
 const QUESTIONS: &str = include_str!("../prompts/questions.txt");
 const SVG: &str = include_str!("../prompts/svg.txt");
+const SEARCH: &str = include_str!("../prompts/search.txt");
 
 pub fn render_plan(subject: &str, language: &str, count: i64) -> String {
     PLAN.replace("{subject}", subject)
@@ -25,6 +26,13 @@ pub fn render_questions(
 
 pub fn render_svg(asset_json: &str) -> String {
     SVG.replace("{asset_json}", asset_json)
+}
+
+pub fn render_search(query: &str, subjects_json: &str, max_results: i64) -> String {
+    SEARCH
+        .replace("{query}", query)
+        .replace("{subjects_json}", subjects_json)
+        .replace("{max_results}", &max_results.to_string())
 }
 
 #[cfg(test)]
@@ -58,5 +66,16 @@ mod tests {
         let prompt = render_svg(r#"{"id":"red_ball"}"#);
         assert!(prompt.contains(r#"{"id":"red_ball"}"#));
         assert!(!prompt.contains("{asset_json}"));
+    }
+
+    #[test]
+    fn search_prompt_fills_all_placeholders() {
+        let prompt = render_search("prvouka", r#"[{"id":1}]"#, 10);
+        assert!(prompt.contains("prvouka"));
+        assert!(prompt.contains(r#"[{"id":1}]"#));
+        assert!(prompt.contains("at most 10 ids"));
+        assert!(!prompt.contains("{query}"));
+        assert!(!prompt.contains("{subjects_json}"));
+        assert!(!prompt.contains("{max_results}"));
     }
 }

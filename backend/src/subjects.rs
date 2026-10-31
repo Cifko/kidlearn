@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{auth::AuthUser, error::AppError, AppState};
+use crate::{auth::AuthUser, error::AppError, meta::MetaClient, prompts, AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -16,6 +16,7 @@ pub fn router() -> Router<AppState> {
             get(get_subject).delete(delete_subject),
         )
         .route("/subjects/{id}/like", post(like_subject).delete(unlike_subject))
+        .route("/subjects/ai-search", get(ai_search))
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -140,6 +141,91 @@ async fn list_subjects(
 
 fn escape_like(needle: &str) -> String {
     needle.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct AiSearchQuery {
+    q: Option<String>,
+    max_results: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+struct SearchCandidate {
+    id: i64,
+    title: String,
+    description: String,
+    tags: Vec<String>,
+    language: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RankedIds {
+    #[serde(default)]
+    ids: Vec<i64>,
+}
+
+/// Asks the model to rank visible subjects by relevance to the query.
+/// Only ids the model returns (that exist) come back, best first.
+async fn ai_search(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Query(query): Query<AiSearchQuery>,
+) -> Result<Json<Vec<SubjectSummary>>, AppError> {
+    let needle = query.q.unwrap_or_default().trim().to_string();
+    if needle.is_empty() {
+        return Err(AppError::BadRequest("q is required".to_string()));
+    }
+    let client = MetaClient::from_config(&state.config).ok_or_else(|| {
+        AppError::ServiceUnavailable("META_API_KEY is not configured; AI search is disabled".to_string())
+    })?;
+
+    let rows = sqlx::query_as::<_, SubjectRow>(&format!(
+        "SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)
+         ORDER BY c.id DESC LIMIT 50"
+    ))
+    .bind(auth.0.id)
+    .fetch_all(&state.db)
+    .await?;
+    if rows.is_empty() {
+        return Ok(Json(Vec::new()));
+    }
+
+    let candidates: Vec<SearchCandidate> = rows
+        .iter()
+        .map(|row| SearchCandidate {
+            id: row.id,
+            title: row.title.clone(),
+            description: row.description.chars().take(200).collect(),
+            tags: serde_json::from_str(&row.tags_json).unwrap_or_default(),
+            language: row.language.clone(),
+        })
+        .collect();
+    let max_results = query.max_results.unwrap_or(10).clamp(1, 20);
+    let ranked: RankedIds = client
+        .chat_json(
+            &prompts::render_search(
+                &needle,
+                &serde_json::to_string(&candidates).unwrap_or_else(|_| "[]".to_string()),
+                max_results,
+            ),
+            0.2,
+        )
+        .await?;
+
+    let order: std::collections::HashMap<i64, usize> = ranked
+        .ids
+        .iter()
+        .enumerate()
+        .map(|(position, id)| (*id, position))
+        .collect();
+    let mut out: Vec<SubjectSummary> = rows
+        .into_iter()
+        .filter(|row| order.contains_key(&row.id))
+        .map(SubjectSummary::from)
+        .collect();
+    out.sort_by_key(|subject| order[&subject.id]);
+    out.truncate(max_results as usize);
+    Ok(Json(out))
 }
 
 async fn create_subject(

@@ -50,6 +50,7 @@ const strings = {
     like: 'Like',
     unlike: 'Unlike',
     tags: 'Tags (comma separated)',
+    aiSearch: 'AI search',
   },
   sk: {
     tagline: 'Nauč sa čokoľvek, krok za krokom.',
@@ -98,6 +99,7 @@ const strings = {
     like: 'Like',
     unlike: 'Zrušiť like',
     tags: 'Značky (oddelené čiarkou)',
+    aiSearch: 'AI hľadanie',
   },
 } as const;
 

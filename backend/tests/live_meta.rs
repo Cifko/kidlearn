@@ -128,6 +128,30 @@ async fn live_generate_and_render_svg() {
         "expected 2-3 questions, got {question_count}"
     );
 
+    // AI search finds the new subject by meaning.
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/subjects/ai-search?q=basic+colors+for+kids")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    let results: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let ids: Vec<i64> = results
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["id"].as_i64().unwrap())
+        .collect();
+    assert!(ids.contains(&id));
+
     let (asset_id,): (i64,) = sqlx::query_as("SELECT id FROM assets LIMIT 1")
         .fetch_one(&pool)
         .await

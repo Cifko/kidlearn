@@ -163,6 +163,8 @@ export const api = {
   subjectProgress: (token: string, id: number) =>
     request<SubjectProgress>(`/subjects/${id}/progress`, { token }),
   stats: (token: string) => request<Stats>('/stats', { token }),
+  aiSearch: (token: string, q: string) =>
+    request<SubjectSummary[]>(`/subjects/ai-search?q=${encodeURIComponent(q)}`, { token }),
   assetSvg: async (token: string, path: string): Promise<string> => {
     const response = await fetch(`${API_URL}${path}`, {
       headers: { authorization: `Bearer ${token}` },

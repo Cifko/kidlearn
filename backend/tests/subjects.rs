@@ -488,3 +488,99 @@ async fn create_rejects_bad_tags() {
     let (status, _) = create_subject(&app, &token, json!({ "title": "Bad", "tags": many })).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
+
+async fn mock_meta(content: &str) -> (String, tokio::task::JoinHandle<()>) {
+    let content = content.to_string();
+    let app = axum::Router::new().route(
+        "/chat/completions",
+        axum::routing::post(move || {
+            let content = content.clone();
+            async move {
+                axum::Json(json!({
+                    "choices": [{ "message": { "content": content } }]
+                }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    (url, handle)
+}
+
+async fn ai_app(meta_base: &str) -> axum::Router {
+    let mut config = Config::for_tests();
+    config.meta_api_key = Some("test-key".to_string());
+    config.meta_api_base = meta_base.to_string();
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    create_app(AppState::new(pool, config))
+}
+
+#[tokio::test]
+async fn ai_search_returns_model_ranking() {
+    // Model ranks third subject first, invents id 999 (dropped), then first.
+    let (url, _server) = mock_meta(r#"{"ids":[3,999,1]}"#).await;
+    let app = ai_app(&url).await;
+    let token = login_token(&app).await;
+    for title in ["Math", "Animals", "Prvouka"] {
+        create_subject(&app, &token, json!({ "title": title })).await;
+    }
+
+    let response = app
+        .oneshot(
+            Request::get("/subjects/ai-search?q=school")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let ids: Vec<i64> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(ids, vec![3, 1]);
+}
+
+#[tokio::test]
+async fn ai_search_disabled_without_key() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let response = app
+        .oneshot(
+            Request::get("/subjects/ai-search?q=school")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn ai_search_requires_query() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let response = app
+        .oneshot(
+            Request::get("/subjects/ai-search")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}

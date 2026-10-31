@@ -46,6 +46,25 @@ export function HomeScreen({
     [token],
   );
 
+  const loadAi = useCallback(
+    async (q: string) => {
+      const needle = q.trim();
+      if (needle.length === 0) {
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        setSubjects(await api.aiSearch(token, needle));
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [token],
+  );
+
   useEffect(() => {
     load('');
   }, [load]);
@@ -78,14 +97,19 @@ export function HomeScreen({
           onChange={setLang}
         />
       </View>
-      <TextInput
-        style={styles.search}
-        value={query}
-        onChangeText={setQuery}
-        onSubmitEditing={() => load(query)}
-        placeholder={t('search')}
-        returnKeyType="search"
-      />
+      <View style={styles.searchRow}>
+        <TextInput
+          style={[styles.search, styles.searchInput]}
+          value={query}
+          onChangeText={setQuery}
+          onSubmitEditing={() => load(query)}
+          placeholder={t('search')}
+          returnKeyType="search"
+        />
+        <TouchableOpacity style={styles.aiButton} onPress={() => loadAi(query)}>
+          <Text style={styles.aiButtonText}>{t('aiSearch')}</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.newButton}>
         <ChunkyButton title={t('newSubject')} onPress={onCreate} color="blue" />
       </View>
@@ -143,6 +167,11 @@ const styles = StyleSheet.create({
   langBox: {
     marginBottom: 16,
   },
+  searchRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
   search: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -152,7 +181,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: colors.ink,
-    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+  },
+  aiButton: {
+    backgroundColor: colors.blueDark,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  aiButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
   newButton: {
     marginBottom: 20,
