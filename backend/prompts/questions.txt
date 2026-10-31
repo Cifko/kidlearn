@@ -31,8 +31,8 @@ LESSON ALIGNMENT (most important - read twice):
     - Shape lesson: same color and size, different shapes.
     - Vocabulary lesson: same category (all fruits, all animals), never mixed categories.
 11. "Find the X" questions are FORBIDDEN unless the lesson is explicitly about recognizing or naming that thing.
-12. The question text must name the task in the lesson's own words ("How many apples?", "Which shows 7?"), never generic filler ("find the snack!").
-13. REAL FAILURE, never repeat it: for a counting lesson, "Count 11, 12! Find the snack!" with options apple, step, ball is WRONG - the answer comes from recognizing an object, not from counting. The fixed version asks "How many apples?" with options showing different numbers of apples.
+12. The question text must name ONE target the child can find among the options ("Which picture shows 4 apples?", "Which shows 7?"), never generic filler ("find the snack!"). "How many X?" is FORBIDDEN: the options are images with no reference picture, so the child cannot know which group the question points at and must guess.
+13. REAL FAILURE, never repeat it: for a counting lesson, "Count 11, 12! Find the snack!" with options apple, step, ball is WRONG - the answer comes from recognizing an object, not from counting. The fixed version asks "Which picture shows 4 apples?" with options showing different numbers of apples - the text gives the target, the child counts each picture and picks the match.
 14. Each question carries a "focus" field: one short phrase in English naming the exact skill it tests (e.g. "count to 12"). If you cannot name it, the question is off-topic: rewrite the question, do not ship it.
 
 MANDATORY STYLE FOR ALL ASSETS:

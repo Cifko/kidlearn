@@ -70,6 +70,8 @@ mod tests {
         assert!(questions.contains("differ ONLY in the tested attribute"));
         assert!(questions.contains("FORBIDDEN"));
         assert!(questions.contains("\"focus\""));
+        assert!(questions.contains("Which picture shows 4 apples?"));
+        assert!(!questions.contains("How many apples?"));
     }
 
     #[test]
