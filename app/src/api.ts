@@ -40,7 +40,6 @@ export interface CreateSubjectInput {
   title: string;
   description?: string;
   language?: string;
-  visibility?: string;
   lesson_count?: number;
   tags?: string[];
 }
@@ -140,7 +139,13 @@ async function request<T>(
 }
 
 export const api = {
-  devLogin: () => request<{ token: string; user: User }>('/auth/dev-login', { method: 'POST' }),
+  devLogin: (who?: string) =>
+    request<{ token: string; user: User }>('/auth/dev-login', {
+      method: 'POST',
+      body: who ? { who } : undefined,
+    }),
+  publishSubject: (token: string, id: number) =>
+    request<SubjectSummary>(`/subjects/${id}/publish`, { method: 'POST', token }),
   googleLogin: (idToken: string) =>
     request<{ token: string; user: User }>('/auth/google', {
       method: 'POST',

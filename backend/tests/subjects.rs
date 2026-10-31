@@ -62,7 +62,7 @@ async fn create_and_list_own_subject() {
     let (status, created) = create_subject(
         &app,
         &token,
-        json!({ "title": "Prvouka", "description": "ucivo pre skolu", "language": "sk", "visibility": "private" }),
+        json!({ "title": "Prvouka", "description": "ucivo pre skolu", "language": "sk" }),
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
@@ -94,14 +94,6 @@ async fn create_validates_input() {
     let token = login_token(&app).await;
 
     let (status, _) = create_subject(&app, &token, json!({ "title": "  " })).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-
-    let (status, _) = create_subject(
-        &app,
-        &token,
-        json!({ "title": "Ok", "visibility": "everyone" }),
-    )
-    .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
@@ -377,6 +369,24 @@ async fn unlike(app: &axum::Router, token: &str, id: i64) -> (StatusCode, serde_
     (status, serde_json::from_slice(&body).unwrap())
 }
 
+async fn publish(app: &axum::Router, token: &str, id: i64) -> (StatusCode, serde_json::Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post(format!("/subjects/{id}/publish"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
 #[tokio::test]
 async fn like_unlike_flow_updates_counts() {
     let (pool, app) = test_state().await;
@@ -588,6 +598,115 @@ async fn ai_search_requires_query() {
     let response = app
         .oneshot(
             Request::get("/subjects/ai-search")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn creation_is_always_private() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    // Even a client still sending the old visibility field gets a private subject.
+    let (status, created) = create_subject(
+        &app,
+        &token,
+        json!({ "title": "Mine", "visibility": "public" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["visibility"], "private");
+}
+
+#[tokio::test]
+async fn publish_flow() {
+    let (pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let (_, created) = create_subject(&app, &token, json!({ "title": "Mine" })).await;
+    let id = created["id"].as_i64().unwrap();
+
+    // A subject that is still generating cannot be published.
+    sqlx::query("UPDATE subjects SET status = 'generating' WHERE id = ?")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, _) = publish(&app, &token, id).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    sqlx::query("UPDATE subjects SET status = 'ready' WHERE id = ?")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, published) = publish(&app, &token, id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(published["visibility"], "public");
+
+    // Publishing twice is harmless.
+    let (status, published) = publish(&app, &token, id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(published["visibility"], "public");
+}
+
+#[tokio::test]
+async fn others_cannot_publish_your_subject() {
+    let (_pool, app) = test_state().await;
+    let mine = login_token(&app).await;
+    let (_, created) = create_subject(&app, &mine, json!({ "title": "Mine" })).await;
+    let id = created["id"].as_i64().unwrap();
+
+    // Log in as the second dev user and try to publish someone else's subject.
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/auth/dev-login")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"who":"dev2"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let login: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let other = login["token"].as_str().unwrap();
+
+    let (status, _) = publish(&app, other, id).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn published_subjects_cannot_regenerate_or_delete() {
+    // Point at nothing: regeneration must be rejected before any Meta call.
+    let app = ai_app("http://127.0.0.1:1").await;
+    let token = login_token(&app).await;
+    let (_, created) = create_subject(&app, &token, json!({ "title": "Mine" })).await;
+    let id = created["id"].as_i64().unwrap();
+    let (status, _) = publish(&app, &token, id).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post(format!("/subjects/{id}/generate"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let response = app
+        .oneshot(
+            Request::delete(format!("/subjects/{id}"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),

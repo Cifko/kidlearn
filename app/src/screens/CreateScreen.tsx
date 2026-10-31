@@ -21,7 +21,6 @@ export function CreateScreen({
   const [description, setDescription] = useState('');
   const [tagsText, setTagsText] = useState('');
   const [contentLang, setContentLang] = useState<Lang>(lang);
-  const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [count, setCount] = useState(20);
   const [phase, setPhase] = useState<Phase>('editing');
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +42,6 @@ export function CreateScreen({
         title: title.trim(),
         description: description.trim(),
         language: contentLang,
-        visibility,
         lesson_count: count,
         tags,
       });
@@ -103,16 +101,6 @@ export function CreateScreen({
           ]}
           value={contentLang}
           onChange={setContentLang}
-        />
-      </Field>
-      <Field label={t('visibility')}>
-        <Segmented<'private' | 'public'>
-          options={[
-            { value: 'private', label: t('private') },
-            { value: 'public', label: t('public') },
-          ]}
-          value={visibility}
-          onChange={setVisibility}
         />
       </Field>
       <Field label={t('lessons')}>

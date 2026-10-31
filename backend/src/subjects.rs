@@ -21,6 +21,7 @@ pub fn router() -> Router<AppState> {
             "/subjects/{id}/like",
             post(like_subject).delete(unlike_subject),
         )
+        .route("/subjects/{id}/publish", post(publish_subject))
         .route("/subjects/ai-search", get(ai_search))
 }
 
@@ -87,7 +88,6 @@ pub struct CreateSubject {
     pub title: String,
     pub description: Option<String>,
     pub language: Option<String>,
-    pub visibility: Option<String>,
     pub lesson_count: Option<i64>,
     pub tags: Option<Vec<String>>,
 }
@@ -258,12 +258,6 @@ async fn create_subject(
             "title must be 1-120 characters".to_string(),
         ));
     }
-    let visibility = input.visibility.unwrap_or_else(|| "private".to_string());
-    if visibility != "public" && visibility != "private" {
-        return Err(AppError::BadRequest(
-            "visibility must be 'public' or 'private'".to_string(),
-        ));
-    }
     let language = input.language.unwrap_or_else(|| "en".to_string());
     let language = language.trim().to_string();
     if language.is_empty() || language.len() > 8 {
@@ -284,7 +278,7 @@ async fn create_subject(
     .bind(&title)
     .bind(&description)
     .bind(&language)
-    .bind(&visibility)
+    .bind("private")
     .bind(lesson_count)
     .bind(&tags_json)
     .fetch_one(&state.db)
@@ -406,18 +400,49 @@ async fn unlike_subject(
     Ok(Json(subject_summary(&state.db, auth.0.id, id).await?))
 }
 
+/// Publishes an own, ready subject. Irreversible: a published subject can
+/// no longer be regenerated or deleted, so learners never lose progress.
+async fn publish_subject(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<SubjectSummary>, AppError> {
+    let summary = subject_summary(&state.db, auth.0.id, id).await?;
+    if !summary.mine {
+        return Err(AppError::NotFound("subject not found".to_string()));
+    }
+    if summary.visibility == "public" {
+        return Ok(Json(summary));
+    }
+    if summary.status != "ready" {
+        return Err(AppError::BadRequest(
+            "only ready subjects can be published".to_string(),
+        ));
+    }
+    sqlx::query("UPDATE subjects SET visibility = 'public' WHERE id = ?")
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+    Ok(Json(subject_summary(&state.db, auth.0.id, id).await?))
+}
+
 async fn delete_subject(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, AppError> {
-    let result = sqlx::query("DELETE FROM subjects WHERE id = ? AND owner_id = ?")
-        .bind(id)
-        .bind(auth.0.id)
-        .execute(&state.db)
-        .await?;
-    if result.rows_affected() == 0 {
+    let summary = subject_summary(&state.db, auth.0.id, id).await?;
+    if !summary.mine {
         return Err(AppError::NotFound("subject not found".to_string()));
     }
+    if summary.visibility == "public" {
+        return Err(AppError::BadRequest(
+            "cannot delete a published subject".to_string(),
+        ));
+    }
+    sqlx::query("DELETE FROM subjects WHERE id = ?")
+        .bind(id)
+        .execute(&state.db)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }

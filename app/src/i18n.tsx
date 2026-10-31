@@ -6,6 +6,7 @@ const strings = {
   en: {
     tagline: 'Learn anything, one small step at a time.',
     devLogin: 'Log in as Dev',
+    devLogin2: 'Log in as Dev 2',
     googleLogin: 'Continue with Google',
     googleSoon: 'Google login (coming soon)',
     logout: 'Log out',
@@ -30,6 +31,9 @@ const strings = {
     regenerate: 'Regenerate',
     delete: 'Delete',
     deleteConfirm: 'Delete this subject and all its lessons?',
+    publish: 'Publish',
+    publishConfirm:
+      'Publish this subject? Everyone will see it, and you will no longer be able to regenerate or delete it.',
     cancel: 'Cancel',
     loading: 'Loading…',
     empty: 'No subjects yet. Create the first one!',
@@ -60,6 +64,7 @@ const strings = {
   sk: {
     tagline: 'Nauč sa čokoľvek, krok za krokom.',
     devLogin: 'Prihlásiť ako vývojár',
+    devLogin2: 'Prihlásiť ako vývojár 2',
     googleLogin: 'Pokračovať cez Google',
     googleSoon: 'Prihlásenie cez Google (čoskoro)',
     logout: 'Odhlásiť',
@@ -84,6 +89,9 @@ const strings = {
     regenerate: 'Pregenerovať',
     delete: 'Zmazať',
     deleteConfirm: 'Zmazať tento predmet aj so všetkými lekciami?',
+    publish: 'Zverejniť',
+    publishConfirm:
+      'Zverejniť tento predmet? Uvidia ho všetci a už ho nepôjde pregenerovať ani zmazať.',
     cancel: 'Zrušiť',
     loading: 'Načítavam…',
     empty: 'Zatiaľ tu nič nie je. Vytvor prvý predmet!',

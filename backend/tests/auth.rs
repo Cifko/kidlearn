@@ -204,3 +204,54 @@ async fn google_login_disabled_without_client_id() {
     let (status, _) = google_login(&app).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
 }
+
+#[tokio::test]
+async fn dev_login_supports_second_user() {
+    let app = test_app().await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/auth/dev-login")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let first: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/auth/dev-login")
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "who": "dev2" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let second: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(second["user"]["email"], "dev2@localhost");
+    assert_ne!(second["user"]["id"], first["user"]["id"]);
+
+    let response = app
+        .oneshot(
+            Request::get("/me")
+                .header(
+                    "authorization",
+                    format!("Bearer {}", second["token"].as_str().unwrap()),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}

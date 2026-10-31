@@ -117,6 +117,11 @@ async fn generate_subject(
     .fetch_optional(&state.db)
     .await?
     .ok_or_else(|| AppError::NotFound("subject not found".to_string()))?;
+    if subject.visibility == "public" {
+        return Err(AppError::BadRequest(
+            "cannot regenerate a published subject".to_string(),
+        ));
+    }
 
     let params = body.map(|b| b.0).unwrap_or_default();
     let count = params

@@ -50,11 +50,11 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
       });
   }, [response, onLoggedIn]);
 
-  async function handleDevLogin() {
+  async function handleDevLogin(who?: string) {
     setLoading(true);
     setError(null);
     try {
-      const { token } = await api.devLogin();
+      const { token } = await api.devLogin(who);
       await AsyncStorage.setItem('kidlearn.token', token);
       onLoggedIn(token);
     } catch (err) {
@@ -83,7 +83,19 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
       <Text style={styles.tagline}>{t('tagline')}</Text>
       {error && <ErrorBox message={error} />}
       <View style={styles.gap}>
-        <ChunkyButton title={t('devLogin')} onPress={handleDevLogin} loading={loading} />
+        <ChunkyButton
+          title={t('devLogin')}
+          onPress={() => handleDevLogin()}
+          loading={loading}
+        />
+      </View>
+      <View style={styles.gap}>
+        <ChunkyButton
+          title={t('devLogin2')}
+          onPress={() => handleDevLogin('dev2')}
+          color="blue"
+          loading={loading}
+        />
       </View>
       <ChunkyButton
         title={GOOGLE_CLIENT_ID ? t('googleLogin') : t('googleSoon')}

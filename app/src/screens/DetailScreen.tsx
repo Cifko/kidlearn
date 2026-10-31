@@ -25,6 +25,7 @@ export function DetailScreen({
   const [busy, setBusy] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingPublish, setConfirmingPublish] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
@@ -94,6 +95,23 @@ export function DetailScreen({
       setError(err instanceof ApiError ? err.message : 'Like failed');
     } finally {
       setLikeBusy(false);
+    }
+  }
+
+  async function handlePublishConfirmed() {
+    if (!detail) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await api.publishSubject(token, subjectId);
+      setDetail({ ...detail, visibility: updated.visibility });
+      setConfirmingPublish(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Publish failed');
+      setConfirmingPublish(false);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -186,7 +204,37 @@ export function DetailScreen({
               );
             })}
           </View>
-          {detail.mine && !confirmingDelete && (
+          {detail.mine &&
+            detail.visibility === 'private' &&
+            detail.status === 'ready' &&
+            !confirmingDelete &&
+            !confirmingPublish && (
+              <View style={styles.publishRow}>
+                <ChunkyButton title={t('publish')} onPress={() => setConfirmingPublish(true)} />
+              </View>
+            )}
+          {detail.mine && confirmingPublish && (
+            <View style={styles.confirmBox}>
+              <Text style={styles.confirmText}>{t('publishConfirm')}</Text>
+              <View style={styles.ownerRow}>
+                <View style={styles.ownerButton}>
+                  <ChunkyButton
+                    title={t('cancel')}
+                    onPress={() => setConfirmingPublish(false)}
+                    color="gray"
+                  />
+                </View>
+                <View style={styles.ownerButton}>
+                  <ChunkyButton
+                    title={t('publish')}
+                    onPress={handlePublishConfirmed}
+                    loading={busy}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+          {detail.mine && detail.visibility === 'private' && !confirmingDelete && !confirmingPublish && (
             <View style={styles.ownerRow}>
               <View style={styles.ownerButton}>
                 <ChunkyButton
@@ -205,7 +253,7 @@ export function DetailScreen({
               </View>
             </View>
           )}
-          {detail.mine && confirmingDelete && (
+          {detail.mine && confirmingDelete && !confirmingPublish && (
             <View style={styles.confirmBox}>
               <Text style={styles.confirmText}>{t('deleteConfirm')}</Text>
               <View style={styles.ownerRow}>
@@ -352,6 +400,9 @@ const styles = StyleSheet.create({
   ownerRow: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 16,
+  },
+  publishRow: {
     marginTop: 16,
   },
   confirmBox: {

@@ -28,20 +28,35 @@ pub fn router() -> Router<AppState> {
         .route("/me", get(me))
 }
 
-/// Development-only login: one shared dev user, no password, no OAuth.
-async fn dev_login(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+#[derive(Debug, Default, Deserialize)]
+struct DevLoginRequest {
+    who: Option<String>,
+}
+
+/// Development-only login, no password, no OAuth. `{"who": "dev2"}` logs in
+/// a second user so multi-user flows (likes, public subjects) are testable.
+async fn dev_login(
+    State(state): State<AppState>,
+    body: Option<Json<DevLoginRequest>>,
+) -> Result<Json<Value>, AppError> {
+    let (email, name) = match body.and_then(|body| body.0.who) {
+        Some(who) if who == "dev2" => ("dev2@localhost", "Dev 2"),
+        _ => ("dev@localhost", "Dev"),
+    };
     sqlx::query(
-        "INSERT INTO users (email, name) VALUES ('dev@localhost', 'Dev')
+        "INSERT INTO users (email, name) VALUES (?, ?)
          ON CONFLICT (email) DO UPDATE SET name = excluded.name",
     )
+    .bind(email)
+    .bind(name)
     .execute(&state.db)
     .await?;
 
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, email, name, created_at FROM users WHERE email = 'dev@localhost'",
-    )
-    .fetch_one(&state.db)
-    .await?;
+    let user =
+        sqlx::query_as::<_, User>("SELECT id, email, name, created_at FROM users WHERE email = ?")
+            .bind(email)
+            .fetch_one(&state.db)
+            .await?;
 
     tracing::info!(user_id = user.id, "dev login");
     Ok(issue_login(&state, &user))
