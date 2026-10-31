@@ -1,26 +1,26 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { api, ApiError, CategoryDetail, SubProgress } from '../api';
+import { api, ApiError, SubjectDetail, LessonProgress } from '../api';
 import { useLang } from '../i18n';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
 
 export function DetailScreen({
   token,
-  categoryId,
+  subjectId,
   onBack,
   onDeleted,
   onLearn,
 }: {
   token: string;
-  categoryId: number;
+  subjectId: number;
   onBack: () => void;
   onDeleted: () => void;
-  onLearn: (subId: number) => void;
+  onLearn: (lessonId: number) => void;
 }) {
   const { t } = useLang();
-  const [detail, setDetail] = useState<CategoryDetail | null>(null);
-  const [progress, setProgress] = useState<Record<number, SubProgress>>({});
+  const [detail, setDetail] = useState<SubjectDetail | null>(null);
+  const [progress, setProgress] = useState<Record<number, LessonProgress>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +33,11 @@ export function DetailScreen({
       setError(null);
       try {
         const [data, prog] = await Promise.all([
-          api.getCategory(token, categoryId),
-          api.categoryProgress(token, categoryId),
+          api.getSubject(token, subjectId),
+          api.subjectProgress(token, subjectId),
         ]);
         setDetail(data);
-        setProgress(Object.fromEntries(prog.subcategories.map((s) => [s.subcategory_id, s])));
+        setProgress(Object.fromEntries(prog.lessons.map((s) => [s.lesson_id, s])));
       } catch (err) {
         setError(err instanceof ApiError ? err.message : 'Failed to load');
       } finally {
@@ -46,7 +46,7 @@ export function DetailScreen({
         }
       }
     },
-    [token, categoryId],
+    [token, subjectId],
   );
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function DetailScreen({
     setBusy(true);
     setError(null);
     try {
-      await api.generateCategory(token, categoryId, detail.subcategory_count);
+      await api.generateSubject(token, subjectId, detail.lesson_count);
       await load(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Generation failed');
@@ -86,7 +86,7 @@ export function DetailScreen({
         onPress: async () => {
           setBusy(true);
           try {
-            await api.deleteCategory(token, categoryId);
+            await api.deleteSubject(token, subjectId);
             onDeleted();
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Delete failed');
@@ -119,7 +119,7 @@ export function DetailScreen({
           )}
           {detail.status === 'failed' && <Text style={styles.statusFailed}>{t('failed')}</Text>}
           <View style={styles.list}>
-            {detail.subcategories.map((sub) => {
+            {detail.lessons.map((sub) => {
               const prog = progress[sub.id];
               const locked = prog ? !prog.unlocked : false;
               const done =

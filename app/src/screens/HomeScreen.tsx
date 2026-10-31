@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, ApiError, CategorySummary, Stats, User } from '../api';
+import { api, ApiError, SubjectSummary, Stats, User } from '../api';
 import { useLang } from '../i18n';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen, Segmented } from '../ui';
@@ -20,7 +20,7 @@ export function HomeScreen({
   onLogout: () => void;
 }) {
   const { lang, setLang, t } = useLang();
-  const [categories, setCategories] = useState<CategorySummary[]>([]);
+  const [subjects, setSubjects] = useState<SubjectSummary[]>([]);
   const [query, setQuery] = useState('');
   const [stats, setStats] = useState<Stats>({ xp: 0, streak_days: 0 });
   const [loading, setLoading] = useState(true);
@@ -32,10 +32,10 @@ export function HomeScreen({
       setError(null);
       try {
         const [list, userStats] = await Promise.all([
-          api.listCategories(token, q.trim() || undefined),
+          api.listSubjects(token, q.trim() || undefined),
           api.stats(token),
         ]);
-        setCategories(list);
+        setSubjects(list);
         setStats(userStats);
       } catch (err) {
         setError(err instanceof ApiError ? err.message : 'Failed to load');
@@ -59,7 +59,7 @@ export function HomeScreen({
     <Screen>
       <View style={styles.header}>
         <View>
-          <Text style={styles.heading}>{t('categories')}</Text>
+          <Text style={styles.heading}>{t('subjects')}</Text>
           <Text style={styles.user}>
             {user.name} · {stats.xp} XP · {t('streak')} {stats.streak_days}
           </Text>
@@ -87,30 +87,30 @@ export function HomeScreen({
         returnKeyType="search"
       />
       <View style={styles.newButton}>
-        <ChunkyButton title={t('newCategory')} onPress={onCreate} color="blue" />
+        <ChunkyButton title={t('newSubject')} onPress={onCreate} color="blue" />
       </View>
       {error && <ErrorBox message={error} onRetry={() => load(query)} />}
       {loading && <Text style={styles.muted}>{t('loading')}</Text>}
-      {!loading && !error && categories.length === 0 && (
+      {!loading && !error && subjects.length === 0 && (
         <Text style={styles.muted}>{t('empty')}</Text>
       )}
-      {categories.map((category) => (
-        <TouchableOpacity key={category.id} style={styles.card} onPress={() => onOpen(category.id)}>
+      {subjects.map((subject) => (
+        <TouchableOpacity key={subject.id} style={styles.card} onPress={() => onOpen(subject.id)}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>{category.title}</Text>
-            <Text style={[styles.badge, category.mine ? styles.badgeMine : styles.badgePublic]}>
-              {category.mine ? t('mine') : category.owner_name}
+            <Text style={styles.cardTitle}>{subject.title}</Text>
+            <Text style={[styles.badge, subject.mine ? styles.badgeMine : styles.badgePublic]}>
+              {subject.mine ? t('mine') : subject.owner_name}
             </Text>
           </View>
           <Text style={styles.cardMeta}>
-            {category.language.toUpperCase()} ·{' '}
-            {category.visibility === 'public' ? t('public') : t('private')} ·{' '}
-            {category.subcategory_count}
+            {subject.language.toUpperCase()} ·{' '}
+            {subject.visibility === 'public' ? t('public') : t('private')} ·{' '}
+            {subject.lesson_count}
           </Text>
-          {category.status === 'generating' && (
+          {subject.status === 'generating' && (
             <Text style={styles.statusGenerating}>{t('generating')}</Text>
           )}
-          {category.status === 'failed' && <Text style={styles.statusFailed}>{t('failed')}</Text>}
+          {subject.status === 'failed' && <Text style={styles.statusFailed}>{t('failed')}</Text>}
         </TouchableOpacity>
       ))}
     </Screen>

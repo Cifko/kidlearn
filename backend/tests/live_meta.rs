@@ -55,7 +55,7 @@ async fn live_generate_and_render_svg() {
     let response = app
         .clone()
         .oneshot(
-            Request::post("/categories")
+            Request::post("/subjects")
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(
@@ -64,7 +64,7 @@ async fn live_generate_and_render_svg() {
                         "description": "basic colors for kids",
                         "language": "en",
                         "visibility": "private",
-                        "subcategory_count": 1
+                        "lesson_count": 1
                     })
                     .to_string(),
                 ))
@@ -82,11 +82,11 @@ async fn live_generate_and_render_svg() {
     let response = app
         .clone()
         .oneshot(
-            Request::post(format!("/categories/{id}/generate"))
+            Request::post(format!("/subjects/{id}/generate"))
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(
-                    json!({ "subcategory_count": 1, "min_questions": 2, "max_questions": 3 })
+                    json!({ "lesson_count": 1, "min_questions": 2, "max_questions": 3 })
                         .to_string(),
                 ))
                 .unwrap(),
@@ -102,7 +102,7 @@ async fn live_generate_and_render_svg() {
         let response = app
             .clone()
             .oneshot(
-                Request::get(format!("/categories/{id}"))
+                Request::get(format!("/subjects/{id}"))
                     .header("authorization", format!("Bearer {token}"))
                     .body(Body::empty())
                     .unwrap(),
@@ -120,7 +120,7 @@ async fn live_generate_and_render_svg() {
         }
     }
     assert_eq!(detail["status"], "ready");
-    let subs = detail["subcategories"].as_array().unwrap();
+    let subs = detail["lessons"].as_array().unwrap();
     assert_eq!(subs.len(), 1);
     let question_count = subs[0]["question_count"].as_i64().unwrap();
     assert!(

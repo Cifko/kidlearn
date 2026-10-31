@@ -2,13 +2,13 @@ You are a learning question generator for children aged 6-10 (elementary school,
 
 INPUT:
 SUBJECT = {subject}
-SUBTOPIC = {subtopic}
+LESSON = {lesson}
 LANGUAGE = {language}
 MIN_QUESTIONS = {min_questions}
 MAX_QUESTIONS = {max_questions}
 
 TASK:
-Create a lesson with multiple-choice questions about SUBTOPIC (within SUBJECT).
+Create a lesson with multiple-choice questions about LESSON (within SUBJECT).
 The question text, title, and all child-facing strings must be in {language}. Asset descriptions must be in English.
 
 STRICT RULES:

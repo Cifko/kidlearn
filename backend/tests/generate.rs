@@ -30,11 +30,11 @@ async fn login_token(app: &axum::Router) -> String {
     json["token"].as_str().unwrap().to_string()
 }
 
-async fn create_category_id(app: &axum::Router, token: &str) -> i64 {
+async fn create_subject_id(app: &axum::Router, token: &str) -> i64 {
     let response = app
         .clone()
         .oneshot(
-            Request::post("/categories")
+            Request::post("/subjects")
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(json!({ "title": "Math" }).to_string()))
@@ -54,11 +54,11 @@ async fn create_category_id(app: &axum::Router, token: &str) -> i64 {
 async fn generate_without_api_key_reports_disabled() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;
-    let id = create_category_id(&app, &token).await;
+    let id = create_subject_id(&app, &token).await;
 
     let response = app
         .oneshot(
-            Request::post(format!("/categories/{id}/generate"))
+            Request::post(format!("/subjects/{id}/generate"))
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(json!({}).to_string()))
@@ -73,9 +73,9 @@ async fn generate_without_api_key_reports_disabled() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(json["error"].as_str().unwrap().contains("META_API_KEY"));
 
-    // The category is untouched: still ready, still empty.
+    // The subject is untouched: still ready, still empty.
     let (status,): (String,) =
-        sqlx::query_as("SELECT status FROM categories WHERE id = ?")
+        sqlx::query_as("SELECT status FROM subjects WHERE id = ?")
             .bind(id)
             .fetch_one(&pool)
             .await
@@ -93,7 +93,7 @@ async fn generate_rejects_non_owner() {
         .await
         .unwrap();
     let (other_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO categories (owner_id, title, visibility)
+        "INSERT INTO subjects (owner_id, title, visibility)
          VALUES ((SELECT id FROM users WHERE email = 'other@example.com'), 'Theirs', 'public')
          RETURNING id",
     )
@@ -103,7 +103,7 @@ async fn generate_rejects_non_owner() {
 
     let response = app
         .oneshot(
-            Request::post(format!("/categories/{other_id}/generate"))
+            Request::post(format!("/subjects/{other_id}/generate"))
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(json!({}).to_string()))
@@ -119,18 +119,18 @@ async fn generate_rejects_non_owner() {
 async fn svg_serves_cached_image() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;
-    let category_id = create_category_id(&app, &token).await;
+    let subject_id = create_subject_id(&app, &token).await;
 
     let (sub_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO subcategories (category_id, position, title) VALUES (?, 1, 'Counting') RETURNING id",
+        "INSERT INTO lessons (subject_id, position, title) VALUES (?, 1, 'Counting') RETURNING id",
     )
-    .bind(category_id)
+    .bind(subject_id)
     .fetch_one(&pool)
     .await
     .unwrap();
     let svg = r#"<svg viewBox="0 0 200 200"></svg>"#;
     let (asset_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO assets (subcategory_id, asset_key, spec_json, svg_text) VALUES (?, 'red_ball', '{}', ?) RETURNING id",
+        "INSERT INTO assets (lesson_id, asset_key, spec_json, svg_text) VALUES (?, 'red_ball', '{}', ?) RETURNING id",
     )
     .bind(sub_id)
     .bind(svg)
@@ -178,16 +178,16 @@ async fn svg_missing_asset_returns_404() {
 async fn svg_uncached_without_key_reports_disabled() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;
-    let category_id = create_category_id(&app, &token).await;
+    let subject_id = create_subject_id(&app, &token).await;
     let (sub_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO subcategories (category_id, position, title) VALUES (?, 1, 'Counting') RETURNING id",
+        "INSERT INTO lessons (subject_id, position, title) VALUES (?, 1, 'Counting') RETURNING id",
     )
-    .bind(category_id)
+    .bind(subject_id)
     .fetch_one(&pool)
     .await
     .unwrap();
     let (asset_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO assets (subcategory_id, asset_key, spec_json) VALUES (?, 'red_ball', '{}') RETURNING id",
+        "INSERT INTO assets (lesson_id, asset_key, spec_json) VALUES (?, 'red_ball', '{}') RETURNING id",
     )
     .bind(sub_id)
     .fetch_one(&pool)
@@ -214,12 +214,12 @@ async fn generate_runs_in_background_and_reports_failure() {
     let pool = db::init_pool(&config.database_url).await.unwrap();
     let app = create_app(AppState::new(pool.clone(), config));
     let token = login_token(&app).await;
-    let id = create_category_id(&app, &token).await;
+    let id = create_subject_id(&app, &token).await;
 
     let response = app
         .clone()
         .oneshot(
-            Request::post(format!("/categories/{id}/generate"))
+            Request::post(format!("/subjects/{id}/generate"))
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(json!({}).to_string()))
@@ -235,7 +235,7 @@ async fn generate_runs_in_background_and_reports_failure() {
         let response = app
             .clone()
             .oneshot(
-                Request::get(format!("/categories/{id}"))
+                Request::get(format!("/subjects/{id}"))
                     .header("authorization", format!("Bearer {token}"))
                     .body(Body::empty())
                     .unwrap(),

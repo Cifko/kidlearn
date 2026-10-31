@@ -6,19 +6,19 @@ LANGUAGE = {language}
 COUNT = {count}
 
 TASK:
-Propose COUNT subcategories that break SUBJECT into small learnable steps for a child.
+Propose COUNT lessons that break SUBJECT into small learnable steps for a child.
 The child studies in {language}. All "title" and "summary" strings MUST be written in {language}.
 
 STRICT RULES:
 1. Return ONLY valid JSON according to the schema below. No explanation, no markdown, no extra text.
-2. Return EXACTLY COUNT subcategories.
+2. Return EXACTLY COUNT lessons.
 3. Order them pedagogically: prerequisites first (e.g. counting before addition, addition before subtraction, subtraction before multiplication, multiplication before division).
 4. Keep titles short (2-6 words) and summaries to one simple sentence a child can understand.
-5. Every subcategory must be narrow enough to teach with 5-10 small questions.
+5. Every lesson must be narrow enough to teach with 5-10 small questions.
 
 OUTPUT SCHEMA:
 {
-  "subcategories": [
+  "lessons": [
     { "position": 1, "title": "string in {language}", "summary": "string in {language}" }
   ]
 }

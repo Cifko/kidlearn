@@ -34,17 +34,17 @@ export function CreateScreen({
     setPhase('creating');
     setError(null);
     try {
-      const created = await api.createCategory(token, {
+      const created = await api.createSubject(token, {
         title: title.trim(),
         description: description.trim(),
         language: contentLang,
         visibility,
-        subcategory_count: count,
+        lesson_count: count,
       });
       setPhase('generating');
       // The UI language travels with the request so lessons come back
       // in the language the child actually reads.
-      await api.generateCategory(token, created.id, count);
+      await api.generateSubject(token, created.id, count);
       onDone(created.id);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Creation failed');
@@ -57,7 +57,7 @@ export function CreateScreen({
       <TouchableOpacity onPress={onBack} disabled={busy}>
         <Text style={styles.back}>← {t('back')}</Text>
       </TouchableOpacity>
-      <Text style={styles.heading}>{t('newCategory')}</Text>
+      <Text style={styles.heading}>{t('newSubject')}</Text>
       {error && <ErrorBox message={error} />}
       <Field label={t('title')}>
         <TextInput
@@ -100,7 +100,7 @@ export function CreateScreen({
           onChange={setVisibility}
         />
       </Field>
-      <Field label={t('count')}>
+      <Field label={t('lessons')}>
         <Stepper value={count} min={1} max={50} onChange={setCount} />
       </Field>
       <View style={styles.submit}>

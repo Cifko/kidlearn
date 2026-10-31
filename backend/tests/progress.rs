@@ -10,7 +10,7 @@ struct Seed {
     pool: sqlx::SqlitePool,
     app: axum::Router,
     token: String,
-    category_id: i64,
+    subject_id: i64,
     sub1: i64,
     sub2: i64,
     questions: Vec<i64>,
@@ -36,8 +36,8 @@ async fn seed() -> Seed {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["token"].as_str().unwrap().to_string();
 
-    let (category_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO categories (owner_id, title, visibility)
+    let (subject_id,): (i64,) = sqlx::query_as(
+        "INSERT INTO subjects (owner_id, title, visibility)
          VALUES ((SELECT id FROM users WHERE email = 'dev@localhost'), 'Math', 'private')
          RETURNING id",
     )
@@ -45,28 +45,28 @@ async fn seed() -> Seed {
     .await
     .unwrap();
     let (sub1,): (i64,) = sqlx::query_as(
-        "INSERT INTO subcategories (category_id, position, title) VALUES (?, 1, 'Counting') RETURNING id",
+        "INSERT INTO lessons (subject_id, position, title) VALUES (?, 1, 'Counting') RETURNING id",
     )
-    .bind(category_id)
+    .bind(subject_id)
     .fetch_one(&pool)
     .await
     .unwrap();
     let (sub2,): (i64,) = sqlx::query_as(
-        "INSERT INTO subcategories (category_id, position, title) VALUES (?, 2, 'Adding') RETURNING id",
+        "INSERT INTO lessons (subject_id, position, title) VALUES (?, 2, 'Adding') RETURNING id",
     )
-    .bind(category_id)
+    .bind(subject_id)
     .fetch_one(&pool)
     .await
     .unwrap();
     for key in ["red_ball", "blue_cube", "green_cone"] {
-        sqlx::query("INSERT INTO assets (subcategory_id, asset_key, spec_json) VALUES (?, ?, '{}')")
+        sqlx::query("INSERT INTO assets (lesson_id, asset_key, spec_json) VALUES (?, ?, '{}')")
             .bind(sub1)
             .bind(key)
             .execute(&pool)
             .await
             .unwrap();
     }
-    sqlx::query("INSERT INTO assets (subcategory_id, asset_key, spec_json) VALUES (?, 'yellow_star', '{}')")
+    sqlx::query("INSERT INTO assets (lesson_id, asset_key, spec_json) VALUES (?, 'yellow_star', '{}')")
         .bind(sub2)
         .execute(&pool)
         .await
@@ -76,7 +76,7 @@ async fn seed() -> Seed {
     for (index, correct) in ["red_ball", "blue_cube", "green_cone"].into_iter().enumerate() {
         let position = index as i64 + 1;
         let (id,): (i64,) = sqlx::query_as(
-            "INSERT INTO questions (subcategory_id, position, qid, text, qtype, options_json, correct_asset)
+            "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset)
              VALUES (?, ?, ?, 'Pick it', 'multiple_choice_image', '[\"red_ball\",\"blue_cube\",\"green_cone\"]', ?)
              RETURNING id",
         )
@@ -94,7 +94,7 @@ async fn seed() -> Seed {
         pool,
         app,
         token,
-        category_id,
+        subject_id,
         sub1,
         sub2,
         questions,
@@ -130,7 +130,7 @@ async fn answer(
     let response = app
         .clone()
         .oneshot(
-            Request::post(format!("/subcategories/{sub_id}/answer"))
+            Request::post(format!("/lessons/{sub_id}/answer"))
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(
@@ -154,11 +154,11 @@ async fn lesson_returns_questions_without_answers() {
     let (status, lesson) = get_json(
         &seed.app,
         &seed.token,
-        format!("/subcategories/{}/lesson", seed.sub1),
+        format!("/lessons/{}", seed.sub1),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(lesson["subcategory"]["title"], "Counting");
+    assert_eq!(lesson["title"], "Counting");
     let questions = lesson["questions"].as_array().unwrap();
     assert_eq!(questions.len(), 3);
     for question in questions {
@@ -181,14 +181,14 @@ async fn second_lesson_locks_until_first_is_attempted() {
     let (status, _) = get_json(
         &seed.app,
         &seed.token,
-        format!("/subcategories/{}/lesson", seed.sub2),
+        format!("/lessons/{}", seed.sub2),
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 
     // Answering a locked lesson is rejected too.
     let (sub2_question,): (i64,) = sqlx::query_as(
-        "INSERT INTO questions (subcategory_id, position, qid, text, qtype, options_json, correct_asset)
+        "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset)
          VALUES (?, 1, 'q1', 'Pick it', 'multiple_choice_image', '[\"yellow_star\"]', 'yellow_star')
          RETURNING id",
     )
@@ -209,7 +209,7 @@ async fn second_lesson_locks_until_first_is_attempted() {
     let (status, _) = get_json(
         &seed.app,
         &seed.token,
-        format!("/subcategories/{}/lesson", seed.sub2),
+        format!("/lessons/{}", seed.sub2),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -226,11 +226,11 @@ async fn wrong_answer_reveals_correct_key_and_records_progress() {
     let (status, progress) = get_json(
         &seed.app,
         &seed.token,
-        format!("/categories/{}/progress", seed.category_id),
+        format!("/subjects/{}/progress", seed.subject_id),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    let subs = progress["subcategories"].as_array().unwrap();
+    let subs = progress["lessons"].as_array().unwrap();
     assert_eq!(subs.len(), 2);
     assert_eq!(subs[0]["answered"], 1);
     assert_eq!(subs[0]["correct"], 0);
@@ -245,10 +245,10 @@ async fn wrong_answer_reveals_correct_key_and_records_progress() {
     let (_, progress) = get_json(
         &seed.app,
         &seed.token,
-        format!("/categories/{}/progress", seed.category_id),
+        format!("/subjects/{}/progress", seed.subject_id),
     )
     .await;
-    assert_eq!(progress["subcategories"][0]["correct"], 1);
+    assert_eq!(progress["lessons"][0]["correct"], 1);
 }
 
 #[tokio::test]
@@ -258,7 +258,7 @@ async fn lesson_requires_auth_and_respects_visibility() {
         .app
         .clone()
         .oneshot(
-            Request::get(format!("/subcategories/{}/lesson", seed.sub1))
+            Request::get(format!("/lessons/{}", seed.sub1))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -271,7 +271,7 @@ async fn lesson_requires_auth_and_respects_visibility() {
         .await
         .unwrap();
     let (other_cat,): (i64,) = sqlx::query_as(
-        "INSERT INTO categories (owner_id, title, visibility)
+        "INSERT INTO subjects (owner_id, title, visibility)
          VALUES ((SELECT id FROM users WHERE email = 'other@example.com'), 'Theirs', 'private')
          RETURNING id",
     )
@@ -279,7 +279,7 @@ async fn lesson_requires_auth_and_respects_visibility() {
     .await
     .unwrap();
     let (other_sub,): (i64,) = sqlx::query_as(
-        "INSERT INTO subcategories (category_id, position, title) VALUES (?, 1, 'Secret') RETURNING id",
+        "INSERT INTO lessons (subject_id, position, title) VALUES (?, 1, 'Secret') RETURNING id",
     )
     .bind(other_cat)
     .fetch_one(&seed.pool)
@@ -288,7 +288,7 @@ async fn lesson_requires_auth_and_respects_visibility() {
     let (status, _) = get_json(
         &seed.app,
         &seed.token,
-        format!("/subcategories/{other_sub}/lesson"),
+        format!("/lessons/{other_sub}/lesson"),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);

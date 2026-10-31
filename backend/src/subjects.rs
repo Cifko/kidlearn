@@ -10,38 +10,38 @@ use crate::{auth::AuthUser, error::AppError, AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/categories", get(list_categories).post(create_category))
+        .route("/subjects", get(list_subjects).post(create_subject))
         .route(
-            "/categories/{id}",
-            get(get_category).delete(delete_category),
+            "/subjects/{id}",
+            get(get_subject).delete(delete_subject),
         )
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
-pub struct CategorySummary {
+pub struct SubjectSummary {
     pub id: i64,
     pub title: String,
     pub description: String,
     pub language: String,
     pub visibility: String,
     pub status: String,
-    pub subcategory_count: i64,
+    pub lesson_count: i64,
     pub owner_name: String,
     pub mine: bool,
     pub created_at: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CreateCategory {
+pub struct CreateSubject {
     pub title: String,
     pub description: Option<String>,
     pub language: Option<String>,
     pub visibility: Option<String>,
-    pub subcategory_count: Option<i64>,
+    pub lesson_count: Option<i64>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
-pub struct SubcategoryWithCount {
+pub struct LessonWithCount {
     pub id: i64,
     pub position: i64,
     pub title: String,
@@ -50,26 +50,26 @@ pub struct SubcategoryWithCount {
 }
 
 #[derive(Debug, Serialize)]
-pub struct CategoryDetail {
+pub struct SubjectDetail {
     #[serde(flatten)]
-    pub category: CategorySummary,
-    pub subcategories: Vec<SubcategoryWithCount>,
+    pub subject: SubjectSummary,
+    pub lessons: Vec<LessonWithCount>,
 }
 
 const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visibility, c.status,
-    c.subcategory_count, u.name AS owner_name, (c.owner_id = ?1) AS mine, c.created_at
-    FROM categories c JOIN users u ON u.id = c.owner_id";
+    c.lesson_count, u.name AS owner_name, (c.owner_id = ?1) AS mine, c.created_at
+    FROM subjects c JOIN users u ON u.id = c.owner_id";
 
 #[derive(Debug, Default, Deserialize)]
 struct ListQuery {
     q: Option<String>,
 }
 
-async fn list_categories(
+async fn list_subjects(
     auth: AuthUser,
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
-) -> Result<Json<Vec<CategorySummary>>, AppError> {
+) -> Result<Json<Vec<SubjectSummary>>, AppError> {
     let needle = query.q.unwrap_or_default().trim().to_string();
     let mut sql = format!(
         "SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)"
@@ -78,7 +78,7 @@ async fn list_categories(
         sql.push_str(" AND (c.title LIKE ?2 ESCAPE '\\' OR c.description LIKE ?2 ESCAPE '\\')");
     }
     sql.push_str(" ORDER BY c.id DESC");
-    let mut select = sqlx::query_as::<_, CategorySummary>(&sql).bind(auth.0.id);
+    let mut select = sqlx::query_as::<_, SubjectSummary>(&sql).bind(auth.0.id);
     if !needle.is_empty() {
         select = select.bind(format!("%{}%", escape_like(&needle)));
     }
@@ -89,11 +89,11 @@ fn escape_like(needle: &str) -> String {
     needle.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
 }
 
-async fn create_category(
+async fn create_subject(
     auth: AuthUser,
     State(state): State<AppState>,
-    Json(input): Json<CreateCategory>,
-) -> Result<(StatusCode, Json<CategorySummary>), AppError> {
+    Json(input): Json<CreateSubject>,
+) -> Result<(StatusCode, Json<SubjectSummary>), AppError> {
     let title = input.title.trim().to_string();
     if title.is_empty() || title.len() > 120 {
         return Err(AppError::BadRequest(
@@ -111,11 +111,11 @@ async fn create_category(
     if language.is_empty() || language.len() > 8 {
         return Err(AppError::BadRequest("language must be 1-8 characters".to_string()));
     }
-    let subcategory_count = input.subcategory_count.unwrap_or(20).clamp(1, 50);
+    let lesson_count = input.lesson_count.unwrap_or(20).clamp(1, 50);
     let description = input.description.unwrap_or_default();
 
     let (id,): (i64,) = sqlx::query_as(
-        "INSERT INTO categories (owner_id, title, description, language, visibility, status, subcategory_count)
+        "INSERT INTO subjects (owner_id, title, description, language, visibility, status, lesson_count)
          VALUES (?, ?, ?, ?, ?, 'ready', ?) RETURNING id",
     )
     .bind(auth.0.id)
@@ -123,11 +123,11 @@ async fn create_category(
     .bind(&description)
     .bind(&language)
     .bind(&visibility)
-    .bind(subcategory_count)
+    .bind(lesson_count)
     .fetch_one(&state.db)
     .await?;
 
-    let summary = sqlx::query_as::<_, CategorySummary>(&format!(
+    let summary = sqlx::query_as::<_, SubjectSummary>(&format!(
         "SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2"
     ))
     .bind(auth.0.id)
@@ -137,57 +137,57 @@ async fn create_category(
     Ok((StatusCode::CREATED, Json(summary)))
 }
 
-async fn get_category(
+async fn get_subject(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<i64>,
-) -> Result<Json<CategoryDetail>, AppError> {
-    Ok(Json(category_detail(&state.db, auth.0.id, id).await?))
+) -> Result<Json<SubjectDetail>, AppError> {
+    Ok(Json(subject_detail(&state.db, auth.0.id, id).await?))
 }
 
-/// Loads a category with its ordered subcategories, enforcing visibility.
+/// Loads a subject with its ordered lessons, enforcing visibility.
 /// Shared by the detail endpoint and the generator.
-pub async fn category_detail(
+pub async fn subject_detail(
     pool: &sqlx::SqlitePool,
     user_id: i64,
-    category_id: i64,
-) -> Result<CategoryDetail, AppError> {
-    let category = sqlx::query_as::<_, CategorySummary>(&format!(
+    subject_id: i64,
+) -> Result<SubjectDetail, AppError> {
+    let subject = sqlx::query_as::<_, SubjectSummary>(&format!(
         "SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2 AND (c.visibility = 'public' OR c.owner_id = ?1)"
     ))
     .bind(user_id)
-    .bind(category_id)
+    .bind(subject_id)
     .fetch_optional(pool)
     .await?
-    .ok_or_else(|| AppError::NotFound("category not found".to_string()))?;
+    .ok_or_else(|| AppError::NotFound("subject not found".to_string()))?;
 
-    let subcategories = sqlx::query_as::<_, SubcategoryWithCount>(
+    let lessons = sqlx::query_as::<_, LessonWithCount>(
         "SELECT s.id, s.position, s.title, s.summary, COUNT(q.id) AS question_count
-         FROM subcategories s LEFT JOIN questions q ON q.subcategory_id = s.id
-         WHERE s.category_id = ? GROUP BY s.id ORDER BY s.position",
+         FROM lessons s LEFT JOIN questions q ON q.lesson_id = s.id
+         WHERE s.subject_id = ? GROUP BY s.id ORDER BY s.position",
     )
-    .bind(category_id)
+    .bind(subject_id)
     .fetch_all(pool)
     .await?;
 
-    Ok(CategoryDetail {
-        category,
-        subcategories,
+    Ok(SubjectDetail {
+        subject,
+        lessons,
     })
 }
 
-async fn delete_category(
+async fn delete_subject(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, AppError> {
-    let result = sqlx::query("DELETE FROM categories WHERE id = ? AND owner_id = ?")
+    let result = sqlx::query("DELETE FROM subjects WHERE id = ? AND owner_id = ?")
         .bind(id)
         .bind(auth.0.id)
         .execute(&state.db)
         .await?;
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound("category not found".to_string()));
+        return Err(AppError::NotFound("subject not found".to_string()));
     }
     Ok(StatusCode::NO_CONTENT)
 }

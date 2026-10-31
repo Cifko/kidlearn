@@ -11,22 +11,22 @@ use serde::Deserialize;
 
 use crate::{
     auth::AuthUser,
-    categories::{category_detail, CategoryDetail},
+    subjects::{subject_detail, SubjectDetail},
     error::AppError,
     meta::MetaClient,
-    models::Category,
+    models::Subject,
     prompts, AppState,
 };
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/categories/{id}/generate", post(generate_category))
+        .route("/subjects/{id}/generate", post(generate_subject))
         .route("/assets/{id}/svg", get(asset_svg))
 }
 
 #[derive(Debug, Default, Deserialize)]
 pub struct GenerateRequest {
-    pub subcategory_count: Option<i64>,
+    pub lesson_count: Option<i64>,
     pub min_questions: Option<i64>,
     pub max_questions: Option<i64>,
 }
@@ -34,7 +34,7 @@ pub struct GenerateRequest {
 #[derive(Debug, Deserialize)]
 struct PlanResponse {
     #[serde(default)]
-    subcategories: Vec<PlanItem>,
+    lessons: Vec<PlanItem>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -83,35 +83,35 @@ struct LessonAsset {
     secondary_color: String,
 }
 
-/// Starts generating subcategories, questions and image specs for an owned
-/// category. Returns 202 immediately; the client polls the detail endpoint
+/// Starts generating lessons, questions and image specs for an owned
+/// subject. Returns 202 immediately; the client polls the detail endpoint
 /// until the status flips to `ready` or `failed`.
-async fn generate_category(
+async fn generate_subject(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<i64>,
     body: Option<Json<GenerateRequest>>,
-) -> Result<(StatusCode, Json<CategoryDetail>), AppError> {
+) -> Result<(StatusCode, Json<SubjectDetail>), AppError> {
     let client = MetaClient::from_config(&state.config).ok_or_else(|| {
         AppError::ServiceUnavailable(
             "META_API_KEY is not configured; generation is disabled".to_string(),
         )
     })?;
 
-    let category = sqlx::query_as::<_, Category>(
-        "SELECT id, owner_id, title, description, language, visibility, status, subcategory_count, created_at
-         FROM categories WHERE id = ? AND owner_id = ?",
+    let subject = sqlx::query_as::<_, Subject>(
+        "SELECT id, owner_id, title, description, language, visibility, status, lesson_count, created_at
+         FROM subjects WHERE id = ? AND owner_id = ?",
     )
     .bind(id)
     .bind(auth.0.id)
     .fetch_optional(&state.db)
     .await?
-    .ok_or_else(|| AppError::NotFound("category not found".to_string()))?;
+    .ok_or_else(|| AppError::NotFound("subject not found".to_string()))?;
 
     let params = body.map(|b| b.0).unwrap_or_default();
     let count = params
-        .subcategory_count
-        .unwrap_or(category.subcategory_count)
+        .lesson_count
+        .unwrap_or(subject.lesson_count)
         .clamp(1, 50);
     let min_questions = params.min_questions.unwrap_or(5).clamp(1, 20);
     let max_questions = params.max_questions.unwrap_or(10).clamp(1, 20);
@@ -121,7 +121,7 @@ async fn generate_category(
         ));
     }
 
-    sqlx::query("UPDATE categories SET status = 'generating', subcategory_count = ? WHERE id = ?")
+    sqlx::query("UPDATE subjects SET status = 'generating', lesson_count = ? WHERE id = ?")
         .bind(count)
         .bind(id)
         .execute(&state.db)
@@ -134,74 +134,74 @@ async fn generate_category(
         let outcome = run_generation(
             &pool,
             &client,
-            &category,
+            &subject,
             count,
             min_questions,
             max_questions,
         )
         .await;
         let status = if outcome.is_ok() { "ready" } else { "failed" };
-        let _ = sqlx::query("UPDATE categories SET status = ? WHERE id = ?")
+        let _ = sqlx::query("UPDATE subjects SET status = ? WHERE id = ?")
             .bind(status)
-            .bind(category.id)
+            .bind(subject.id)
             .execute(&pool)
             .await;
     });
 
-    let detail = category_detail(&state.db, auth.0.id, id).await?;
+    let detail = subject_detail(&state.db, auth.0.id, id).await?;
     Ok((StatusCode::ACCEPTED, Json(detail)))
 }
 
 async fn run_generation(
     pool: &sqlx::SqlitePool,
     client: &MetaClient,
-    category: &Category,
+    subject: &Subject,
     count: i64,
     min_questions: i64,
     max_questions: i64,
 ) -> Result<(), AppError> {
-    let subject = if category.description.trim().is_empty() {
-        category.title.clone()
+    let topic = if subject.description.trim().is_empty() {
+        subject.title.clone()
     } else {
-        format!("{} ({})", category.title, category.description.trim())
+        format!("{} ({})", subject.title, subject.description.trim())
     };
 
     let plan: PlanResponse = client
         .chat_json(
-            &prompts::render_plan(&subject, &category.language, count),
+            &prompts::render_plan(&topic, &subject.language, count),
             0.7,
         )
         .await?;
-    if plan.subcategories.is_empty() {
+    if plan.lessons.is_empty() {
         return Err(AppError::ServiceUnavailable(
-            "generation backend returned no subcategories".to_string(),
+            "generation backend returned no lessons".to_string(),
         ));
     }
 
     // Regenerating replaces the previous content.
-    sqlx::query("DELETE FROM subcategories WHERE category_id = ?")
-        .bind(category.id)
+    sqlx::query("DELETE FROM lessons WHERE subject_id = ?")
+        .bind(subject.id)
         .execute(pool)
         .await?;
 
-    for (index, item) in plan.subcategories.iter().take(count as usize).enumerate() {
+    for (index, item) in plan.lessons.iter().take(count as usize).enumerate() {
         let title = item.title.trim();
         if title.is_empty() {
             continue;
         }
         let position = index as i64 + 1;
-        let (subcategory_id,): (i64,) = sqlx::query_as(
-            "INSERT INTO subcategories (category_id, position, title, summary)
+        let (lesson_id,): (i64,) = sqlx::query_as(
+            "INSERT INTO lessons (subject_id, position, title, summary)
              VALUES (?, ?, ?, ?) RETURNING id",
         )
-        .bind(category.id)
+        .bind(subject.id)
         .bind(position)
         .bind(title)
         .bind(item.summary.trim())
         .fetch_one(pool)
         .await?;
 
-        let subtopic = if item.summary.trim().is_empty() {
+        let lesson_topic = if item.summary.trim().is_empty() {
             title.to_string()
         } else {
             format!("{}: {}", title, item.summary.trim())
@@ -209,23 +209,23 @@ async fn run_generation(
         let lesson: LessonResponse = client
             .chat_json(
                 &prompts::render_questions(
-                    &subject,
-                    &subtopic,
-                    &category.language,
+                    &topic,
+                    &lesson_topic,
+                    &subject.language,
                     min_questions,
                     max_questions,
                 ),
                 0.7,
             )
             .await?;
-        store_lesson(pool, subcategory_id, &lesson, max_questions as usize).await?;
+        store_lesson(pool, lesson_id, &lesson, max_questions as usize).await?;
     }
     Ok(())
 }
 
 async fn store_lesson(
     pool: &sqlx::SqlitePool,
-    subcategory_id: i64,
+    lesson_id: i64,
     lesson: &LessonResponse,
     max_questions: usize,
 ) -> Result<(), AppError> {
@@ -237,10 +237,10 @@ async fn store_lesson(
         asset_ids.insert(asset.id.as_str());
         let spec = serde_json::to_string(asset).unwrap_or_else(|_| "{}".to_string());
         sqlx::query(
-            "INSERT INTO assets (subcategory_id, asset_key, spec_json) VALUES (?, ?, ?)
-             ON CONFLICT (subcategory_id, asset_key) DO UPDATE SET spec_json = excluded.spec_json",
+            "INSERT INTO assets (lesson_id, asset_key, spec_json) VALUES (?, ?, ?)
+             ON CONFLICT (lesson_id, asset_key) DO UPDATE SET spec_json = excluded.spec_json",
         )
-        .bind(subcategory_id)
+        .bind(lesson_id)
         .bind(asset.id.as_str())
         .bind(spec)
         .execute(pool)
@@ -258,10 +258,10 @@ async fn store_lesson(
         position += 1;
         let options = serde_json::to_string(&question.options_asset_ids).unwrap_or_else(|_| "[]".to_string());
         sqlx::query(
-            "INSERT INTO questions (subcategory_id, position, qid, text, qtype, options_json, correct_asset)
+            "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset)
              VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(subcategory_id)
+        .bind(lesson_id)
         .bind(position)
         .bind(if question.id.trim().is_empty() {
             format!("q{position}")
@@ -297,8 +297,8 @@ async fn asset_svg(
 ) -> Result<impl IntoResponse, AppError> {
     let row: Option<(String, Option<String>)> = sqlx::query_as(
         "SELECT a.spec_json, a.svg_text FROM assets a
-         JOIN subcategories s ON s.id = a.subcategory_id
-         JOIN categories c ON c.id = s.category_id
+         JOIN lessons s ON s.id = a.lesson_id
+         JOIN subjects c ON c.id = s.subject_id
          WHERE a.id = ? AND (c.visibility = 'public' OR c.owner_id = ?)",
     )
     .bind(id)

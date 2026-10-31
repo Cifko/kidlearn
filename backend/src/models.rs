@@ -9,7 +9,7 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct Category {
+pub struct Subject {
     pub id: i64,
     pub owner_id: i64,
     pub title: String,
@@ -17,14 +17,14 @@ pub struct Category {
     pub language: String,
     pub visibility: String,
     pub status: String,
-    pub subcategory_count: i64,
+    pub lesson_count: i64,
     pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct Subcategory {
+pub struct Lesson {
     pub id: i64,
-    pub category_id: i64,
+    pub subject_id: i64,
     pub position: i64,
     pub title: String,
     pub summary: String,
@@ -33,7 +33,7 @@ pub struct Subcategory {
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Question {
     pub id: i64,
-    pub subcategory_id: i64,
+    pub lesson_id: i64,
     pub position: i64,
     pub qid: String,
     pub text: String,
@@ -45,7 +45,7 @@ pub struct Question {
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Asset {
     pub id: i64,
-    pub subcategory_id: i64,
+    pub lesson_id: i64,
     pub asset_key: String,
     pub spec_json: String,
     pub svg_text: Option<String>,

@@ -15,7 +15,7 @@ type Route =
   | { name: 'home' }
   | { name: 'create' }
   | { name: 'detail'; id: number }
-  | { name: 'learn'; categoryId: number; subId: number };
+  | { name: 'learn'; subjectId: number; lessonId: number };
 
 function Shell() {
   const { t } = useLang();
@@ -81,8 +81,8 @@ function Shell() {
     return (
       <LearnScreen
         token={token}
-        subId={route.subId}
-        onExit={() => setRoute({ name: 'detail', id: route.categoryId })}
+        lessonId={route.lessonId}
+        onExit={() => setRoute({ name: 'detail', id: route.subjectId })}
       />
     );
   }
@@ -91,10 +91,10 @@ function Shell() {
     return (
       <DetailScreen
         token={token}
-        categoryId={route.id}
+        subjectId={route.id}
         onBack={() => setRoute({ name: 'home' })}
         onDeleted={() => setRoute({ name: 'home' })}
-        onLearn={(subId) => setRoute({ name: 'learn', categoryId: route.id, subId })}
+        onLearn={(lessonId) => setRoute({ name: 'learn', subjectId: route.id, lessonId })}
       />
     );
   }

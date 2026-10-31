@@ -10,11 +10,11 @@ const HEARTS_PER_RUN = 3;
 
 export function LearnScreen({
   token,
-  subId,
+  lessonId,
   onExit,
 }: {
   token: string;
-  subId: number;
+  lessonId: number;
   onExit: () => void;
 }) {
   const { t } = useLang();
@@ -36,7 +36,7 @@ export function LearnScreen({
     setLoading(true);
     setError(null);
     try {
-      const data = await api.lesson(token, subId);
+      const data = await api.lesson(token, lessonId);
       const urls = [...new Set(data.questions.flatMap((q) => q.options.map((o) => o.svg_url)))];
       const entries = await Promise.all(
         urls.map(async (url) => [url, await api.assetSvg(token, url)] as const),
@@ -48,7 +48,7 @@ export function LearnScreen({
     } finally {
       setLoading(false);
     }
-  }, [token, subId]);
+  }, [token, lessonId]);
 
   useEffect(() => {
     load();
@@ -73,7 +73,7 @@ export function LearnScreen({
     setPicked(assetKey);
     setChecking(true);
     try {
-      const answer = await api.answer(token, subId, lesson.questions[index].id, assetKey);
+      const answer = await api.answer(token, lessonId, lesson.questions[index].id, assetKey);
       setResult(answer);
       if (answer.correct) {
         setScore((s) => s + 1);
@@ -158,7 +158,7 @@ export function LearnScreen({
 
       {!loading && !error && lesson && total > 0 && !over && (
         <>
-          <Text style={styles.subTitle}>{lesson.subcategory.title}</Text>
+          <Text style={styles.subTitle}>{lesson.title}</Text>
           <Text style={styles.question}>{lesson.questions[index].text}</Text>
           <View style={styles.options}>
             {lesson.questions[index].options.map((option) => {

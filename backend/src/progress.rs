@@ -11,16 +11,16 @@ use crate::{auth::AuthUser, error::AppError, models::Question, AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/subcategories/{id}/lesson", get(get_lesson))
-        .route("/subcategories/{id}/answer", post(answer_question))
-        .route("/categories/{id}/progress", get(get_category_progress))
+        .route("/lessons/{id}", get(get_lesson))
+        .route("/lessons/{id}/answer", post(answer_question))
+        .route("/subjects/{id}/progress", get(get_subject_progress))
         .route("/stats", get(get_stats))
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
-struct SubWithCategory {
+struct LessonWithSubject {
     id: i64,
-    category_id: i64,
+    subject_id: i64,
     position: i64,
     title: String,
     summary: String,
@@ -45,17 +45,12 @@ struct LessonQuestion {
 }
 
 #[derive(Debug, Serialize)]
-struct LessonSub {
+struct Lesson {
     id: i64,
-    category_id: i64,
+    subject_id: i64,
     position: i64,
     title: String,
     summary: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Lesson {
-    subcategory: LessonSub,
     questions: Vec<LessonQuestion>,
 }
 
@@ -83,8 +78,8 @@ struct Stats {
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
-struct SubProgress {
-    subcategory_id: i64,
+struct LessonProgress {
+    lesson_id: i64,
     position: i64,
     total: i64,
     answered: i64,
@@ -92,26 +87,26 @@ struct SubProgress {
 }
 
 #[derive(Debug, Serialize)]
-struct SubProgressWithLock {
+struct LessonProgressWithLock {
     #[serde(flatten)]
-    progress: SubProgress,
+    progress: LessonProgress,
     unlocked: bool,
 }
 
 #[derive(Debug, Serialize)]
-struct CategoryProgress {
-    category_id: i64,
-    subcategories: Vec<SubProgressWithLock>,
+struct SubjectProgress {
+    subject_id: i64,
+    lessons: Vec<LessonProgressWithLock>,
 }
 
 async fn visible_sub(
     pool: &sqlx::SqlitePool,
     user_id: i64,
     sub_id: i64,
-) -> Result<SubWithCategory, AppError> {
-    sqlx::query_as::<_, SubWithCategory>(
-        "SELECT s.id, s.category_id, s.position, s.title, s.summary, c.owner_id, c.visibility
-         FROM subcategories s JOIN categories c ON c.id = s.category_id WHERE s.id = ?",
+) -> Result<LessonWithSubject, AppError> {
+    sqlx::query_as::<_, LessonWithSubject>(
+        "SELECT s.id, s.subject_id, s.position, s.title, s.summary, c.owner_id, c.visibility
+         FROM lessons s JOIN subjects c ON c.id = s.subject_id WHERE s.id = ?",
     )
     .bind(sub_id)
     .fetch_optional(pool)
@@ -125,30 +120,30 @@ async fn visible_sub(
 async fn is_unlocked(
     pool: &sqlx::SqlitePool,
     user_id: i64,
-    category_id: i64,
+    subject_id: i64,
     position: i64,
 ) -> Result<bool, AppError> {
     if position <= 1 {
         return Ok(true);
     }
     let prev: Option<(i64,)> = sqlx::query_as(
-        "SELECT id FROM subcategories WHERE category_id = ? AND position < ?
+        "SELECT id FROM lessons WHERE subject_id = ? AND position < ?
          ORDER BY position DESC LIMIT 1",
     )
-    .bind(category_id)
+    .bind(subject_id)
     .bind(position)
     .fetch_optional(pool)
     .await?;
     let Some((prev_id,)) = prev else {
         return Ok(true);
     };
-    let (total,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM questions WHERE subcategory_id = ?")
+    let (total,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM questions WHERE lesson_id = ?")
         .bind(prev_id)
         .fetch_one(pool)
         .await?;
     let (answered,): (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM progress p JOIN questions q ON q.id = p.question_id
-         WHERE q.subcategory_id = ? AND p.user_id = ?",
+         WHERE q.lesson_id = ? AND p.user_id = ?",
     )
     .bind(prev_id)
     .bind(user_id)
@@ -169,12 +164,12 @@ async fn get_lesson(
     Path(id): Path<i64>,
 ) -> Result<Json<Lesson>, AppError> {
     let sub = visible_sub(&state.db, auth.0.id, id).await?;
-    if !is_unlocked(&state.db, auth.0.id, sub.category_id, sub.position).await? {
+    if !is_unlocked(&state.db, auth.0.id, sub.subject_id, sub.position).await? {
         return Err(locked());
     }
 
     let assets: Vec<(i64, String)> =
-        sqlx::query_as("SELECT id, asset_key FROM assets WHERE subcategory_id = ?")
+        sqlx::query_as("SELECT id, asset_key FROM assets WHERE lesson_id = ?")
             .bind(sub.id)
             .fetch_all(&state.db)
             .await?;
@@ -182,8 +177,8 @@ async fn get_lesson(
         assets.iter().map(|(id, key)| (key.as_str(), *id)).collect();
 
     let questions = sqlx::query_as::<_, Question>(
-        "SELECT id, subcategory_id, position, qid, text, qtype, options_json, correct_asset
-         FROM questions WHERE subcategory_id = ? ORDER BY position",
+        "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset
+         FROM questions WHERE lesson_id = ? ORDER BY position",
     )
     .bind(sub.id)
     .fetch_all(&state.db)
@@ -217,13 +212,11 @@ async fn get_lesson(
     }
 
     Ok(Json(Lesson {
-        subcategory: LessonSub {
-            id: sub.id,
-            category_id: sub.category_id,
-            position: sub.position,
-            title: sub.title,
-            summary: sub.summary,
-        },
+        id: sub.id,
+        subject_id: sub.subject_id,
+        position: sub.position,
+        title: sub.title,
+        summary: sub.summary,
         questions: lesson_questions,
     }))
 }
@@ -236,12 +229,12 @@ async fn answer_question(
     Json(input): Json<AnswerRequest>,
 ) -> Result<Json<AnswerResponse>, AppError> {
     let sub = visible_sub(&state.db, auth.0.id, id).await?;
-    if !is_unlocked(&state.db, auth.0.id, sub.category_id, sub.position).await? {
+    if !is_unlocked(&state.db, auth.0.id, sub.subject_id, sub.position).await? {
         return Err(locked());
     }
     let question = sqlx::query_as::<_, Question>(
-        "SELECT id, subcategory_id, position, qid, text, qtype, options_json, correct_asset
-         FROM questions WHERE id = ? AND subcategory_id = ?",
+        "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset
+         FROM questions WHERE id = ? AND lesson_id = ?",
     )
     .bind(input.question_id)
     .bind(sub.id)
@@ -324,52 +317,52 @@ async fn get_stats(
     Ok(Json(stats))
 }
 
-/// Per-subcategory progress for one category, with unlock flags.
-async fn get_category_progress(
+/// Per-lesson progress for one subject, with unlock flags.
+async fn get_subject_progress(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<i64>,
-) -> Result<Json<CategoryProgress>, AppError> {
-    let category: Option<(i64, String)> =
-        sqlx::query_as("SELECT owner_id, visibility FROM categories WHERE id = ?")
+) -> Result<Json<SubjectProgress>, AppError> {
+    let subject: Option<(i64, String)> =
+        sqlx::query_as("SELECT owner_id, visibility FROM subjects WHERE id = ?")
             .bind(id)
             .fetch_optional(&state.db)
             .await?;
-    let Some((owner_id, visibility)) = category else {
-        return Err(AppError::NotFound("category not found".to_string()));
+    let Some((owner_id, visibility)) = subject else {
+        return Err(AppError::NotFound("subject not found".to_string()));
     };
     if visibility != "public" && owner_id != auth.0.id {
-        return Err(AppError::NotFound("category not found".to_string()));
+        return Err(AppError::NotFound("subject not found".to_string()));
     }
 
-    let rows = sqlx::query_as::<_, SubProgress>(
-        "SELECT s.id AS subcategory_id, s.position,
+    let rows = sqlx::query_as::<_, LessonProgress>(
+        "SELECT s.id AS lesson_id, s.position,
            COUNT(q.id) AS total,
            COUNT(p.question_id) AS answered,
            COALESCE(SUM(p.correct), 0) AS correct
-         FROM subcategories s
-         LEFT JOIN questions q ON q.subcategory_id = s.id
+         FROM lessons s
+         LEFT JOIN questions q ON q.lesson_id = s.id
          LEFT JOIN progress p ON p.question_id = q.id AND p.user_id = ?
-         WHERE s.category_id = ? GROUP BY s.id ORDER BY s.position",
+         WHERE s.subject_id = ? GROUP BY s.id ORDER BY s.position",
     )
     .bind(auth.0.id)
     .bind(id)
     .fetch_all(&state.db)
     .await?;
 
-    let mut subcategories = Vec::with_capacity(rows.len());
+    let mut lessons = Vec::with_capacity(rows.len());
     let mut unlocked = true;
     for row in rows {
         let item_unlocked = unlocked;
         unlocked = row.answered >= row.total;
-        subcategories.push(SubProgressWithLock {
+        lessons.push(LessonProgressWithLock {
             progress: row,
             unlocked: item_unlocked,
         });
     }
 
-    Ok(Json(CategoryProgress {
-        category_id: id,
-        subcategories,
+    Ok(Json(SubjectProgress {
+        subject_id: id,
+        lessons,
     }))
 }

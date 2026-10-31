@@ -10,14 +10,14 @@ pub fn render_plan(subject: &str, language: &str, count: i64) -> String {
 
 pub fn render_questions(
     subject: &str,
-    subtopic: &str,
+    lesson: &str,
     language: &str,
     min_questions: i64,
     max_questions: i64,
 ) -> String {
     QUESTIONS
         .replace("{subject}", subject)
-        .replace("{subtopic}", subtopic)
+        .replace("{lesson}", lesson)
         .replace("{language}", language)
         .replace("{min_questions}", &min_questions.to_string())
         .replace("{max_questions}", &max_questions.to_string())
@@ -48,7 +48,7 @@ mod tests {
         assert!(prompt.contains("addition"));
         assert!(prompt.contains("MIN_QUESTIONS = 5"));
         assert!(prompt.contains("MAX_QUESTIONS = 10"));
-        assert!(!prompt.contains("{subtopic}"));
+        assert!(!prompt.contains("{lesson}"));
         assert!(!prompt.contains("{min_questions}"));
         assert!(!prompt.contains("{max_questions}"));
     }

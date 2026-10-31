@@ -7,20 +7,20 @@ export interface User {
   created_at: string;
 }
 
-export interface CategorySummary {
+export interface SubjectSummary {
   id: number;
   title: string;
   description: string;
   language: string;
   visibility: string;
   status: string;
-  subcategory_count: number;
+  lesson_count: number;
   owner_name: string;
   mine: boolean;
   created_at: string;
 }
 
-export interface Subcategory {
+export interface LessonSummary {
   id: number;
   position: number;
   title: string;
@@ -28,16 +28,16 @@ export interface Subcategory {
   question_count: number;
 }
 
-export interface CategoryDetail extends CategorySummary {
-  subcategories: Subcategory[];
+export interface SubjectDetail extends SubjectSummary {
+  lessons: LessonSummary[];
 }
 
-export interface CreateCategoryInput {
+export interface CreateSubjectInput {
   title: string;
   description?: string;
   language?: string;
   visibility?: string;
-  subcategory_count?: number;
+  lesson_count?: number;
 }
 
 export interface LessonOption {
@@ -54,16 +54,12 @@ export interface LessonQuestion {
   options: LessonOption[];
 }
 
-export interface LessonSub {
+export interface Lesson {
   id: number;
-  category_id: number;
+  subject_id: number;
   position: number;
   title: string;
   summary: string;
-}
-
-export interface Lesson {
-  subcategory: LessonSub;
   questions: LessonQuestion[];
 }
 
@@ -74,13 +70,8 @@ export interface AnswerResult {
   total_xp: number;
 }
 
-export interface Stats {
-  xp: number;
-  streak_days: number;
-}
-
-export interface SubProgress {
-  subcategory_id: number;
+export interface LessonProgress {
+  lesson_id: number;
   position: number;
   total: number;
   answered: number;
@@ -88,9 +79,14 @@ export interface SubProgress {
   unlocked: boolean;
 }
 
-export interface CategoryProgress {
-  category_id: number;
-  subcategories: SubProgress[];
+export interface SubjectProgress {
+  subject_id: number;
+  lessons: LessonProgress[];
+}
+
+export interface Stats {
+  xp: number;
+  streak_days: number;
 }
 
 export class ApiError extends Error {
@@ -131,33 +127,33 @@ export const api = {
       body: { id_token: idToken },
     }),
   me: (token: string) => request<User>('/me', { token }),
-  listCategories: (token: string, q?: string) =>
-    request<CategorySummary[]>(
-      q ? `/categories?q=${encodeURIComponent(q)}` : '/categories',
+  listSubjects: (token: string, q?: string) =>
+    request<SubjectSummary[]>(
+      q ? `/subjects?q=${encodeURIComponent(q)}` : '/subjects',
       { token },
     ),
-  createCategory: (token: string, input: CreateCategoryInput) =>
-    request<CategorySummary>('/categories', { method: 'POST', token, body: input }),
-  getCategory: (token: string, id: number) =>
-    request<CategoryDetail>(`/categories/${id}`, { token }),
-  generateCategory: (token: string, id: number, subcategory_count: number) =>
-    request<CategoryDetail>(`/categories/${id}/generate`, {
+  createSubject: (token: string, input: CreateSubjectInput) =>
+    request<SubjectSummary>('/subjects', { method: 'POST', token, body: input }),
+  getSubject: (token: string, id: number) =>
+    request<SubjectDetail>(`/subjects/${id}`, { token }),
+  generateSubject: (token: string, id: number, lesson_count: number) =>
+    request<SubjectDetail>(`/subjects/${id}/generate`, {
       method: 'POST',
       token,
-      body: { subcategory_count },
+      body: { lesson_count },
     }),
-  deleteCategory: (token: string, id: number) =>
-    request<void>(`/categories/${id}`, { method: 'DELETE', token }),
-  lesson: (token: string, subId: number) =>
-    request<Lesson>(`/subcategories/${subId}/lesson`, { token }),
-  answer: (token: string, subId: number, question_id: number, asset_key: string) =>
-    request<AnswerResult>(`/subcategories/${subId}/answer`, {
+  deleteSubject: (token: string, id: number) =>
+    request<void>(`/subjects/${id}`, { method: 'DELETE', token }),
+  lesson: (token: string, lessonId: number) =>
+    request<Lesson>(`/lessons/${lessonId}`, { token }),
+  answer: (token: string, lessonId: number, question_id: number, asset_key: string) =>
+    request<AnswerResult>(`/lessons/${lessonId}/answer`, {
       method: 'POST',
       token,
       body: { question_id, asset_key },
     }),
-  categoryProgress: (token: string, id: number) =>
-    request<CategoryProgress>(`/categories/${id}/progress`, { token }),
+  subjectProgress: (token: string, id: number) =>
+    request<SubjectProgress>(`/subjects/${id}/progress`, { token }),
   stats: (token: string) => request<Stats>('/stats', { token }),
   assetSvg: async (token: string, path: string): Promise<string> => {
     const response = await fetch(`${API_URL}${path}`, {

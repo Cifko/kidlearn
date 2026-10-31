@@ -10,7 +10,7 @@ const SCHEMA: &[&str] = &[
         google_sub TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )",
-    "CREATE TABLE IF NOT EXISTS categories (
+    "CREATE TABLE IF NOT EXISTS subjects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         owner_id INTEGER NOT NULL REFERENCES users(id),
         title TEXT NOT NULL,
@@ -18,19 +18,19 @@ const SCHEMA: &[&str] = &[
         language TEXT NOT NULL DEFAULT 'en',
         visibility TEXT NOT NULL DEFAULT 'private',
         status TEXT NOT NULL DEFAULT 'ready',
-        subcategory_count INTEGER NOT NULL DEFAULT 20,
+        lesson_count INTEGER NOT NULL DEFAULT 20,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )",
-    "CREATE TABLE IF NOT EXISTS subcategories (
+    "CREATE TABLE IF NOT EXISTS lessons (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+        subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
         position INTEGER NOT NULL,
         title TEXT NOT NULL,
         summary TEXT NOT NULL DEFAULT ''
     )",
     "CREATE TABLE IF NOT EXISTS questions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        subcategory_id INTEGER NOT NULL REFERENCES subcategories(id) ON DELETE CASCADE,
+        lesson_id INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
         position INTEGER NOT NULL,
         qid TEXT NOT NULL,
         text TEXT NOT NULL,
@@ -40,11 +40,11 @@ const SCHEMA: &[&str] = &[
     )",
     "CREATE TABLE IF NOT EXISTS assets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        subcategory_id INTEGER NOT NULL REFERENCES subcategories(id) ON DELETE CASCADE,
+        lesson_id INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
         asset_key TEXT NOT NULL,
         spec_json TEXT NOT NULL,
         svg_text TEXT,
-        UNIQUE (subcategory_id, asset_key)
+        UNIQUE (lesson_id, asset_key)
     )",
     "CREATE TABLE IF NOT EXISTS progress (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -63,7 +63,14 @@ const SCHEMA: &[&str] = &[
 
 /// ALTERs for databases created before the matching column existed.
 /// Each runs on boot; already-applied ones are ignored.
-const MIGRATIONS: &[&str] = &["ALTER TABLE users ADD COLUMN google_sub TEXT"];
+const MIGRATIONS: &[&str] = &[
+    "ALTER TABLE users ADD COLUMN google_sub TEXT",
+    "ALTER TABLE categories RENAME TO subjects",
+    "ALTER TABLE subcategories RENAME TO lessons",
+    "ALTER TABLE lessons RENAME COLUMN category_id TO subject_id",
+    "ALTER TABLE questions RENAME COLUMN subcategory_id TO lesson_id",
+    "ALTER TABLE assets RENAME COLUMN subcategory_id TO lesson_id",
+];
 
 pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
     let mut options = SqlitePoolOptions::new();
@@ -78,7 +85,10 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
     for migration in MIGRATIONS {
         match sqlx::query(migration).execute(&pool).await {
             Ok(_) => {}
-            Err(err) if err.to_string().contains("duplicate column") => {}
+            Err(err)
+                if err.to_string().contains("duplicate column")
+                    || err.to_string().contains("no such table")
+                    || err.to_string().contains("no such column") => {}
             Err(err) => return Err(err),
         }
     }

@@ -31,11 +31,11 @@ async fn login_token(app: &axum::Router) -> String {
     json["token"].as_str().unwrap().to_string()
 }
 
-async fn create_category(app: &axum::Router, token: &str, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+async fn create_subject(app: &axum::Router, token: &str, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
     let response = app
         .clone()
         .oneshot(
-            Request::post("/categories")
+            Request::post("/subjects")
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(body.to_string()))
@@ -52,10 +52,10 @@ async fn create_category(app: &axum::Router, token: &str, body: serde_json::Valu
 }
 
 #[tokio::test]
-async fn create_and_list_own_category() {
+async fn create_and_list_own_subject() {
     let (_pool, app) = test_state().await;
     let token = login_token(&app).await;
-    let (status, created) = create_category(
+    let (status, created) = create_subject(
         &app,
         &token,
         json!({ "title": "Prvouka", "description": "ucivo pre skolu", "language": "sk", "visibility": "private" }),
@@ -68,7 +68,7 @@ async fn create_and_list_own_category() {
 
     let response = app
         .oneshot(
-            Request::get("/categories")
+            Request::get("/subjects")
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -89,10 +89,10 @@ async fn create_validates_input() {
     let (_pool, app) = test_state().await;
     let token = login_token(&app).await;
 
-    let (status, _) = create_category(&app, &token, json!({ "title": "  " })).await;
+    let (status, _) = create_subject(&app, &token, json!({ "title": "  " })).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 
-    let (status, _) = create_category(
+    let (status, _) = create_subject(
         &app,
         &token,
         json!({ "title": "Ok", "visibility": "everyone" }),
@@ -111,7 +111,7 @@ async fn list_shows_public_but_hides_others_private() {
         .await
         .unwrap();
     sqlx::query(
-        "INSERT INTO categories (owner_id, title, visibility) VALUES
+        "INSERT INTO subjects (owner_id, title, visibility) VALUES
          ((SELECT id FROM users WHERE email = 'other@example.com'), 'Shared', 'public'),
          ((SELECT id FROM users WHERE email = 'other@example.com'), 'Secret', 'private')",
     )
@@ -121,7 +121,7 @@ async fn list_shows_public_but_hides_others_private() {
 
     let response = app
         .oneshot(
-            Request::get("/categories")
+            Request::get("/subjects")
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -143,7 +143,7 @@ async fn list_shows_public_but_hides_others_private() {
 }
 
 #[tokio::test]
-async fn detail_guards_others_private_category() {
+async fn detail_guards_others_private_subject() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;
 
@@ -152,7 +152,7 @@ async fn detail_guards_others_private_category() {
         .await
         .unwrap();
     let (private_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO categories (owner_id, title, visibility)
+        "INSERT INTO subjects (owner_id, title, visibility)
          VALUES ((SELECT id FROM users WHERE email = 'other@example.com'), 'Secret', 'private')
          RETURNING id",
     )
@@ -160,7 +160,7 @@ async fn detail_guards_others_private_category() {
     .await
     .unwrap();
     let (public_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO categories (owner_id, title, visibility)
+        "INSERT INTO subjects (owner_id, title, visibility)
          VALUES ((SELECT id FROM users WHERE email = 'other@example.com'), 'Shared', 'public')
          RETURNING id",
     )
@@ -171,7 +171,7 @@ async fn detail_guards_others_private_category() {
     let response = app
         .clone()
         .oneshot(
-            Request::get(format!("/categories/{private_id}"))
+            Request::get(format!("/subjects/{private_id}"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -182,7 +182,7 @@ async fn detail_guards_others_private_category() {
 
     let response = app
         .oneshot(
-            Request::get(format!("/categories/{public_id}"))
+            Request::get(format!("/subjects/{public_id}"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -196,14 +196,14 @@ async fn detail_guards_others_private_category() {
     let detail: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(detail["title"], "Shared");
     assert_eq!(detail["mine"], false);
-    assert_eq!(detail["subcategories"].as_array().unwrap().len(), 0);
+    assert_eq!(detail["lessons"].as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]
-async fn delete_removes_own_category_only() {
+async fn delete_removes_own_subject_only() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;
-    let (status, created) = create_category(&app, &token, json!({ "title": "Temp" })).await;
+    let (status, created) = create_subject(&app, &token, json!({ "title": "Temp" })).await;
     assert_eq!(status, StatusCode::CREATED);
     let id = created["id"].as_i64().unwrap();
 
@@ -212,7 +212,7 @@ async fn delete_removes_own_category_only() {
         .await
         .unwrap();
     let (other_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO categories (owner_id, title, visibility)
+        "INSERT INTO subjects (owner_id, title, visibility)
          VALUES ((SELECT id FROM users WHERE email = 'other@example.com'), 'Theirs', 'public')
          RETURNING id",
     )
@@ -223,7 +223,7 @@ async fn delete_removes_own_category_only() {
     let response = app
         .clone()
         .oneshot(
-            Request::delete(format!("/categories/{other_id}"))
+            Request::delete(format!("/subjects/{other_id}"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -235,7 +235,7 @@ async fn delete_removes_own_category_only() {
     let response = app
         .clone()
         .oneshot(
-            Request::delete(format!("/categories/{id}"))
+            Request::delete(format!("/subjects/{id}"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -246,7 +246,7 @@ async fn delete_removes_own_category_only() {
 
     let response = app
         .oneshot(
-            Request::get(format!("/categories/{id}"))
+            Request::get(format!("/subjects/{id}"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -257,18 +257,18 @@ async fn delete_removes_own_category_only() {
 }
 
 #[tokio::test]
-async fn search_filters_visible_categories() {
+async fn search_filters_visible_subjects() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;
-    create_category(&app, &token, json!({ "title": "Prvouka", "description": "animals and plants" })).await;
-    create_category(&app, &token, json!({ "title": "Math", "description": "counting to ten" })).await;
+    create_subject(&app, &token, json!({ "title": "Prvouka", "description": "animals and plants" })).await;
+    create_subject(&app, &token, json!({ "title": "Math", "description": "counting to ten" })).await;
 
     sqlx::query("INSERT INTO users (email, name) VALUES ('other@example.com', 'Other')")
         .execute(&pool)
         .await
         .unwrap();
     sqlx::query(
-        "INSERT INTO categories (owner_id, title, description, visibility) VALUES
+        "INSERT INTO subjects (owner_id, title, description, visibility) VALUES
          ((SELECT id FROM users WHERE email = 'other@example.com'), 'Shared animals', 'wildlife', 'public'),
          ((SELECT id FROM users WHERE email = 'other@example.com'), 'Secret animals', 'pets', 'private')",
     )
@@ -279,7 +279,7 @@ async fn search_filters_visible_categories() {
     let response = app
         .clone()
         .oneshot(
-            Request::get("/categories?q=animals")
+            Request::get("/subjects?q=animals")
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -303,7 +303,7 @@ async fn search_filters_visible_categories() {
     // LIKE wildcards in the query are literal, not patterns.
     let response = app
         .oneshot(
-            Request::get("/categories?q=%")
+            Request::get("/subjects?q=%")
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -318,10 +318,10 @@ async fn search_filters_visible_categories() {
 }
 
 #[tokio::test]
-async fn categories_require_auth() {
+async fn subjects_require_auth() {
     let (_pool, app) = test_state().await;
     let response = app
-        .oneshot(Request::get("/categories").body(Body::empty()).unwrap())
+        .oneshot(Request::get("/subjects").body(Body::empty()).unwrap())
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
