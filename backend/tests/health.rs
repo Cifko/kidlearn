@@ -36,6 +36,6 @@ async fn database_schema_creates_all_tables() {
     .unwrap();
     assert_eq!(
         tables,
-        vec!["assets", "lessons", "progress", "questions", "stats", "subjects", "users"]
+        vec!["assets", "lessons", "likes", "progress", "questions", "stats", "subjects", "users"]
     );
 }

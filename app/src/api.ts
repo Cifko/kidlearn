@@ -17,6 +17,8 @@ export interface SubjectSummary {
   lesson_count: number;
   owner_name: string;
   mine: boolean;
+  like_count: number;
+  liked_by_me: boolean;
   created_at: string;
 }
 
@@ -144,6 +146,10 @@ export const api = {
     }),
   deleteSubject: (token: string, id: number) =>
     request<void>(`/subjects/${id}`, { method: 'DELETE', token }),
+  likeSubject: (token: string, id: number) =>
+    request<SubjectSummary>(`/subjects/${id}/like`, { method: 'POST', token }),
+  unlikeSubject: (token: string, id: number) =>
+    request<SubjectSummary>(`/subjects/${id}/like`, { method: 'DELETE', token }),
   lesson: (token: string, lessonId: number) =>
     request<Lesson>(`/lessons/${lessonId}`, { token }),
   answer: (token: string, lessonId: number, question_id: number, asset_key: string) =>

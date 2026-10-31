@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,7 @@ pub fn router() -> Router<AppState> {
             "/subjects/{id}",
             get(get_subject).delete(delete_subject),
         )
+        .route("/subjects/{id}/like", post(like_subject).delete(unlike_subject))
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -28,6 +29,8 @@ pub struct SubjectSummary {
     pub lesson_count: i64,
     pub owner_name: String,
     pub mine: bool,
+    pub like_count: i64,
+    pub liked_by_me: bool,
     pub created_at: String,
 }
 
@@ -57,7 +60,10 @@ pub struct SubjectDetail {
 }
 
 const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visibility, c.status,
-    c.lesson_count, u.name AS owner_name, (c.owner_id = ?1) AS mine, c.created_at
+    c.lesson_count, u.name AS owner_name, (c.owner_id = ?1) AS mine,
+    (SELECT COUNT(*) FROM likes l WHERE l.subject_id = c.id) AS like_count,
+    EXISTS(SELECT 1 FROM likes l WHERE l.subject_id = c.id AND l.user_id = ?1) AS liked_by_me,
+    c.created_at
     FROM subjects c JOIN users u ON u.id = c.owner_id";
 
 #[derive(Debug, Default, Deserialize)]
@@ -174,6 +180,55 @@ pub async fn subject_detail(
         subject,
         lessons,
     })
+}
+
+async fn subject_summary(
+    pool: &sqlx::SqlitePool,
+    user_id: i64,
+    subject_id: i64,
+) -> Result<SubjectSummary, AppError> {
+    sqlx::query_as::<_, SubjectSummary>(&format!(
+        "SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2 AND (c.visibility = 'public' OR c.owner_id = ?1)"
+    ))
+    .bind(user_id)
+    .bind(subject_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound("subject not found".to_string()))
+}
+
+/// Likes a visible subject. Idempotent; liking your own is rejected.
+async fn like_subject(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<SubjectSummary>, AppError> {
+    let summary = subject_summary(&state.db, auth.0.id, id).await?;
+    if summary.mine {
+        return Err(AppError::BadRequest(
+            "cannot like your own subject".to_string(),
+        ));
+    }
+    sqlx::query("INSERT OR IGNORE INTO likes (user_id, subject_id) VALUES (?, ?)")
+        .bind(auth.0.id)
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+    Ok(Json(subject_summary(&state.db, auth.0.id, id).await?))
+}
+
+async fn unlike_subject(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<SubjectSummary>, AppError> {
+    subject_summary(&state.db, auth.0.id, id).await?;
+    sqlx::query("DELETE FROM likes WHERE user_id = ? AND subject_id = ?")
+        .bind(auth.0.id)
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+    Ok(Json(subject_summary(&state.db, auth.0.id, id).await?))
 }
 
 async fn delete_subject(

@@ -47,6 +47,8 @@ const strings = {
     outOfHearts: 'Out of hearts!',
     tryAgain: 'Try again',
     streak: 'Streak',
+    like: 'Like',
+    unlike: 'Unlike',
   },
   sk: {
     tagline: 'Nauč sa čokoľvek, krok za krokom.',
@@ -92,6 +94,8 @@ const strings = {
     outOfHearts: 'Došli srdcia!',
     tryAgain: 'Skúsiť znova',
     streak: 'Séria',
+    like: 'Like',
+    unlike: 'Zrušiť like',
   },
 } as const;
 

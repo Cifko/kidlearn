@@ -105,7 +105,7 @@ export function HomeScreen({
           <Text style={styles.cardMeta}>
             {subject.language.toUpperCase()} ·{' '}
             {subject.visibility === 'public' ? t('public') : t('private')} ·{' '}
-            {subject.lesson_count}
+            {subject.lesson_count} · ★ {subject.like_count}
           </Text>
           {subject.status === 'generating' && (
             <Text style={styles.statusGenerating}>{t('generating')}</Text>

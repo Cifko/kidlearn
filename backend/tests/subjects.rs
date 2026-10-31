@@ -326,3 +326,99 @@ async fn subjects_require_auth() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
+
+async fn like(app: &axum::Router, token: &str, id: i64) -> (StatusCode, serde_json::Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post(format!("/subjects/{id}/like"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+async fn unlike(app: &axum::Router, token: &str, id: i64) -> (StatusCode, serde_json::Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::delete(format!("/subjects/{id}/like"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+#[tokio::test]
+async fn like_unlike_flow_updates_counts() {
+    let (pool, app) = test_state().await;
+    let token = login_token(&app).await;
+
+    sqlx::query("INSERT INTO users (email, name) VALUES ('other@example.com', 'Other')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (shared_id,): (i64,) = sqlx::query_as(
+        "INSERT INTO subjects (owner_id, title, visibility)
+         VALUES ((SELECT id FROM users WHERE email = 'other@example.com'), 'Shared', 'public')
+         RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let (status, liked) = like(&app, &token, shared_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(liked["like_count"], 1);
+    assert_eq!(liked["liked_by_me"], true);
+
+    // Liking twice is idempotent.
+    let (status, liked) = like(&app, &token, shared_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(liked["like_count"], 1);
+
+    let (status, unliked) = unlike(&app, &token, shared_id).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(unliked["like_count"], 0);
+    assert_eq!(unliked["liked_by_me"], false);
+}
+
+#[tokio::test]
+async fn like_rejects_own_and_hidden_subjects() {
+    let (pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let (_, created) = create_subject(&app, &token, json!({ "title": "Mine" })).await;
+    let mine_id = created["id"].as_i64().unwrap();
+
+    let (status, _) = like(&app, &token, mine_id).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    sqlx::query("INSERT INTO users (email, name) VALUES ('other@example.com', 'Other')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (secret_id,): (i64,) = sqlx::query_as(
+        "INSERT INTO subjects (owner_id, title, visibility)
+         VALUES ((SELECT id FROM users WHERE email = 'other@example.com'), 'Secret', 'private')
+         RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let (status, _) = like(&app, &token, secret_id).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

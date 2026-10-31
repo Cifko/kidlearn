@@ -59,6 +59,12 @@ const SCHEMA: &[&str] = &[
         streak_days INTEGER NOT NULL DEFAULT 0,
         last_active_date TEXT
     )",
+    "CREATE TABLE IF NOT EXISTS likes (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, subject_id)
+    )",
 ];
 
 /// ALTERs for databases created before the matching column existed.

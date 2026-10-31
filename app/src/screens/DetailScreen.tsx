@@ -23,6 +23,7 @@ export function DetailScreen({
   const [progress, setProgress] = useState<Record<number, LessonProgress>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [likeBusy, setLikeBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
@@ -77,6 +78,24 @@ export function DetailScreen({
     }
   }
 
+  async function handleToggleLike() {
+    if (!detail || likeBusy) {
+      return;
+    }
+    setLikeBusy(true);
+    setError(null);
+    try {
+      const updated = detail.liked_by_me
+        ? await api.unlikeSubject(token, subjectId)
+        : await api.likeSubject(token, subjectId);
+      setDetail({ ...detail, like_count: updated.like_count, liked_by_me: updated.liked_by_me });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Like failed');
+    } finally {
+      setLikeBusy(false);
+    }
+  }
+
   function handleDelete() {
     Alert.alert(t('delete'), t('deleteConfirm'), [
       { text: t('cancel'), style: 'cancel' },
@@ -118,6 +137,18 @@ export function DetailScreen({
             <Text style={styles.statusGenerating}>{t('generating')}</Text>
           )}
           {detail.status === 'failed' && <Text style={styles.statusFailed}>{t('failed')}</Text>}
+          {!detail.mine ? (
+            <View style={styles.likeRow}>
+              <ChunkyButton
+                title={`${detail.liked_by_me ? t('unlike') : t('like')} (${detail.like_count})`}
+                onPress={handleToggleLike}
+                color={detail.liked_by_me ? 'gray' : 'red'}
+                loading={likeBusy}
+              />
+            </View>
+          ) : (
+            <Text style={styles.likeCount}>★ {detail.like_count}</Text>
+          )}
           <View style={styles.list}>
             {detail.lessons.map((sub) => {
               const prog = progress[sub.id];
@@ -210,6 +241,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.red,
     marginTop: 12,
+  },
+  likeRow: {
+    marginTop: 16,
+  },
+  likeCount: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.muted,
+    marginTop: 8,
   },
   list: {
     marginTop: 20,
