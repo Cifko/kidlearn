@@ -19,6 +19,7 @@ export interface SubjectSummary {
   mine: boolean;
   like_count: number;
   liked_by_me: boolean;
+  tags: string[];
   created_at: string;
 }
 
@@ -40,6 +41,7 @@ export interface CreateSubjectInput {
   language?: string;
   visibility?: string;
   lesson_count?: number;
+  tags?: string[];
 }
 
 export interface LessonOption {

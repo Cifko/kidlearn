@@ -19,6 +19,7 @@ export function CreateScreen({
   const { lang, t } = useLang();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [tagsText, setTagsText] = useState('');
   const [contentLang, setContentLang] = useState<Lang>(lang);
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [count, setCount] = useState(20);
@@ -34,12 +35,17 @@ export function CreateScreen({
     setPhase('creating');
     setError(null);
     try {
+      const tags = tagsText
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0);
       const created = await api.createSubject(token, {
         title: title.trim(),
         description: description.trim(),
         language: contentLang,
         visibility,
         lesson_count: count,
+        tags,
       });
       setPhase('generating');
       // The UI language travels with the request so lessons come back
@@ -78,6 +84,15 @@ export function CreateScreen({
           editable={!busy}
           multiline
           numberOfLines={3}
+        />
+      </Field>
+      <Field label={t('tags')}>
+        <TextInput
+          style={styles.input}
+          value={tagsText}
+          onChangeText={setTagsText}
+          editable={!busy}
+          maxLength={200}
         />
       </Field>
       <Field label={t('language')}>

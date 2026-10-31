@@ -133,6 +133,15 @@ export function DetailScreen({
           {detail.description.length > 0 && (
             <Text style={styles.description}>{detail.description}</Text>
           )}
+          {detail.tags.length > 0 && (
+            <View style={styles.tags}>
+              {detail.tags.map((tag) => (
+                <Text key={tag} style={styles.tag}>
+                  #{tag}
+                </Text>
+              ))}
+            </View>
+          )}
           {detail.status === 'generating' && (
             <Text style={styles.statusGenerating}>{t('generating')}</Text>
           )}
@@ -223,6 +232,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.ink,
     marginTop: 12,
+  },
+  tags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  tag: {
+    backgroundColor: '#DDF4FF',
+    color: colors.blueDark,
+    fontSize: 13,
+    fontWeight: '800',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: 'hidden',
   },
   muted: {
     fontSize: 15,

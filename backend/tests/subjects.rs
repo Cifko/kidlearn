@@ -422,3 +422,69 @@ async fn like_rejects_own_and_hidden_subjects() {
     let (status, _) = like(&app, &token, secret_id).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn create_normalizes_and_returns_tags() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let (status, created) = create_subject(
+        &app,
+        &token,
+        json!({ "title": "Math", "tags": ["First Grade", " math ", "MATH"] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["tags"], json!(["first grade", "math"]));
+    let id = created["id"].as_i64().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/subjects/{id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let detail: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(detail["tags"], json!(["first grade", "math"]));
+
+    // Plain search matches tags too.
+    let response = app
+        .oneshot(
+            Request::get("/subjects?q=grade")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["title"], "Math");
+}
+
+#[tokio::test]
+async fn create_rejects_bad_tags() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+
+    let (status, _) = create_subject(
+        &app,
+        &token,
+        json!({ "title": "Bad", "tags": ["this tag is way too long for sure"] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let many: Vec<String> = (0..9).map(|i| format!("tag{i}")).collect();
+    let (status, _) = create_subject(&app, &token, json!({ "title": "Bad", "tags": many })).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}

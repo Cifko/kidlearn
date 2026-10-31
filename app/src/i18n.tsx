@@ -49,6 +49,7 @@ const strings = {
     streak: 'Streak',
     like: 'Like',
     unlike: 'Unlike',
+    tags: 'Tags (comma separated)',
   },
   sk: {
     tagline: 'Nauč sa čokoľvek, krok za krokom.',
@@ -96,6 +97,7 @@ const strings = {
     streak: 'Séria',
     like: 'Like',
     unlike: 'Zrušiť like',
+    tags: 'Značky (oddelené čiarkou)',
   },
 } as const;
 

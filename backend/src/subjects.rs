@@ -18,7 +18,24 @@ pub fn router() -> Router<AppState> {
         .route("/subjects/{id}/like", post(like_subject).delete(unlike_subject))
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
+struct SubjectRow {
+    id: i64,
+    title: String,
+    description: String,
+    language: String,
+    visibility: String,
+    status: String,
+    lesson_count: i64,
+    owner_name: String,
+    mine: bool,
+    like_count: i64,
+    liked_by_me: bool,
+    tags_json: String,
+    created_at: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct SubjectSummary {
     pub id: i64,
     pub title: String,
@@ -31,7 +48,29 @@ pub struct SubjectSummary {
     pub mine: bool,
     pub like_count: i64,
     pub liked_by_me: bool,
+    pub tags: Vec<String>,
     pub created_at: String,
+}
+
+impl From<SubjectRow> for SubjectSummary {
+    fn from(row: SubjectRow) -> Self {
+        let tags = serde_json::from_str(&row.tags_json).unwrap_or_default();
+        Self {
+            id: row.id,
+            title: row.title,
+            description: row.description,
+            language: row.language,
+            visibility: row.visibility,
+            status: row.status,
+            lesson_count: row.lesson_count,
+            owner_name: row.owner_name,
+            mine: row.mine,
+            like_count: row.like_count,
+            liked_by_me: row.liked_by_me,
+            tags,
+            created_at: row.created_at,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,6 +80,7 @@ pub struct CreateSubject {
     pub language: Option<String>,
     pub visibility: Option<String>,
     pub lesson_count: Option<i64>,
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -63,6 +103,7 @@ const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visib
     c.lesson_count, u.name AS owner_name, (c.owner_id = ?1) AS mine,
     (SELECT COUNT(*) FROM likes l WHERE l.subject_id = c.id) AS like_count,
     EXISTS(SELECT 1 FROM likes l WHERE l.subject_id = c.id AND l.user_id = ?1) AS liked_by_me,
+    c.tags_json,
     c.created_at
     FROM subjects c JOIN users u ON u.id = c.owner_id";
 
@@ -81,14 +122,20 @@ async fn list_subjects(
         "SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)"
     );
     if !needle.is_empty() {
-        sql.push_str(" AND (c.title LIKE ?2 ESCAPE '\\' OR c.description LIKE ?2 ESCAPE '\\')");
+        sql.push_str(
+            " AND (c.title LIKE ?2 ESCAPE '\\' OR c.description LIKE ?2 ESCAPE '\\'
+             OR c.tags_json LIKE ?2 ESCAPE '\\')",
+        );
     }
     sql.push_str(" ORDER BY c.id DESC");
-    let mut select = sqlx::query_as::<_, SubjectSummary>(&sql).bind(auth.0.id);
+    let mut select = sqlx::query_as::<_, SubjectRow>(&sql).bind(auth.0.id);
     if !needle.is_empty() {
         select = select.bind(format!("%{}%", escape_like(&needle)));
     }
-    Ok(Json(select.fetch_all(&state.db).await?))
+    let rows: Vec<SubjectRow> = select.fetch_all(&state.db).await?;
+    Ok(Json(
+        rows.into_iter().map(SubjectSummary::from).collect(),
+    ))
 }
 
 fn escape_like(needle: &str) -> String {
@@ -119,10 +166,12 @@ async fn create_subject(
     }
     let lesson_count = input.lesson_count.unwrap_or(20).clamp(1, 50);
     let description = input.description.unwrap_or_default();
+    let tags = normalize_tags(input.tags.unwrap_or_default())?;
+    let tags_json = serde_json::to_string(&tags).unwrap_or_else(|_| "[]".to_string());
 
     let (id,): (i64,) = sqlx::query_as(
-        "INSERT INTO subjects (owner_id, title, description, language, visibility, status, lesson_count)
-         VALUES (?, ?, ?, ?, ?, 'ready', ?) RETURNING id",
+        "INSERT INTO subjects (owner_id, title, description, language, visibility, status, lesson_count, tags_json)
+         VALUES (?, ?, ?, ?, ?, 'ready', ?, ?) RETURNING id",
     )
     .bind(auth.0.id)
     .bind(&title)
@@ -130,17 +179,18 @@ async fn create_subject(
     .bind(&language)
     .bind(&visibility)
     .bind(lesson_count)
+    .bind(&tags_json)
     .fetch_one(&state.db)
     .await?;
 
-    let summary = sqlx::query_as::<_, SubjectSummary>(&format!(
+    let row = sqlx::query_as::<_, SubjectRow>(&format!(
         "SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2"
     ))
     .bind(auth.0.id)
     .bind(id)
     .fetch_one(&state.db)
     .await?;
-    Ok((StatusCode::CREATED, Json(summary)))
+    Ok((StatusCode::CREATED, Json(SubjectSummary::from(row))))
 }
 
 async fn get_subject(
@@ -158,7 +208,7 @@ pub async fn subject_detail(
     user_id: i64,
     subject_id: i64,
 ) -> Result<SubjectDetail, AppError> {
-    let subject = sqlx::query_as::<_, SubjectSummary>(&format!(
+    let row = sqlx::query_as::<_, SubjectRow>(&format!(
         "SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2 AND (c.visibility = 'public' OR c.owner_id = ?1)"
     ))
     .bind(user_id)
@@ -166,6 +216,7 @@ pub async fn subject_detail(
     .fetch_optional(pool)
     .await?
     .ok_or_else(|| AppError::NotFound("subject not found".to_string()))?;
+    let subject = SubjectSummary::from(row);
 
     let lessons = sqlx::query_as::<_, LessonWithCount>(
         "SELECT s.id, s.position, s.title, s.summary, COUNT(q.id) AS question_count
@@ -187,14 +238,36 @@ async fn subject_summary(
     user_id: i64,
     subject_id: i64,
 ) -> Result<SubjectSummary, AppError> {
-    sqlx::query_as::<_, SubjectSummary>(&format!(
+    let row = sqlx::query_as::<_, SubjectRow>(&format!(
         "SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2 AND (c.visibility = 'public' OR c.owner_id = ?1)"
     ))
     .bind(user_id)
     .bind(subject_id)
     .fetch_optional(pool)
     .await?
-    .ok_or_else(|| AppError::NotFound("subject not found".to_string()))
+    .ok_or_else(|| AppError::NotFound("subject not found".to_string()))?;
+    Ok(SubjectSummary::from(row))
+}
+
+/// Lowercases, dedupes and validates tags: at most 8, each 1-24 chars.
+fn normalize_tags(tags: Vec<String>) -> Result<Vec<String>, AppError> {
+    if tags.len() > 8 {
+        return Err(AppError::BadRequest("at most 8 tags allowed".to_string()));
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for tag in tags {
+        let tag = tag.trim().to_lowercase();
+        if tag.is_empty() || tag.len() > 24 {
+            return Err(AppError::BadRequest(
+                "each tag must be 1-24 characters".to_string(),
+            ));
+        }
+        if seen.insert(tag.clone()) {
+            out.push(tag);
+        }
+    }
+    Ok(out)
 }
 
 /// Likes a visible subject. Idempotent; liking your own is rejected.

@@ -18,6 +18,7 @@ pub struct Subject {
     pub visibility: String,
     pub status: String,
     pub lesson_count: i64,
+    pub tags_json: String,
     pub created_at: String,
 }
 

@@ -99,7 +99,7 @@ async fn generate_subject(
     })?;
 
     let subject = sqlx::query_as::<_, Subject>(
-        "SELECT id, owner_id, title, description, language, visibility, status, lesson_count, created_at
+        "SELECT id, owner_id, title, description, language, visibility, status, lesson_count, tags_json, created_at
          FROM subjects WHERE id = ? AND owner_id = ?",
     )
     .bind(id)

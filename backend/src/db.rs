@@ -19,6 +19,7 @@ const SCHEMA: &[&str] = &[
         visibility TEXT NOT NULL DEFAULT 'private',
         status TEXT NOT NULL DEFAULT 'ready',
         lesson_count INTEGER NOT NULL DEFAULT 20,
+        tags_json TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )",
     "CREATE TABLE IF NOT EXISTS lessons (
@@ -76,6 +77,7 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE lessons RENAME COLUMN category_id TO subject_id",
     "ALTER TABLE questions RENAME COLUMN subcategory_id TO lesson_id",
     "ALTER TABLE assets RENAME COLUMN subcategory_id TO lesson_id",
+    "ALTER TABLE subjects ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'",
 ];
 
 pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
