@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { api, ApiError, SubjectDetail, LessonProgress } from '../api';
 import { useLang } from '../i18n';
 import { colors } from '../theme';
@@ -24,6 +24,7 @@ export function DetailScreen({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
@@ -96,24 +97,18 @@ export function DetailScreen({
     }
   }
 
-  function handleDelete() {
-    Alert.alert(t('delete'), t('deleteConfirm'), [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('delete'),
-        style: 'destructive',
-        onPress: async () => {
-          setBusy(true);
-          try {
-            await api.deleteSubject(token, subjectId);
-            onDeleted();
-          } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Delete failed');
-            setBusy(false);
-          }
-        },
-      },
-    ]);
+  // In-app confirm: Alert.alert is a no-op on web, so it can never be
+  // relied on for destructive actions.
+  async function handleDeleteConfirmed() {
+    setBusy(true);
+    try {
+      await api.deleteSubject(token, subjectId);
+      onDeleted();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Delete failed');
+      setBusy(false);
+      setConfirmingDelete(false);
+    }
   }
 
   return (
@@ -189,7 +184,7 @@ export function DetailScreen({
               );
             })}
           </View>
-          {detail.mine && (
+          {detail.mine && !confirmingDelete && (
             <View style={styles.ownerRow}>
               <View style={styles.ownerButton}>
                 <ChunkyButton
@@ -200,7 +195,33 @@ export function DetailScreen({
                 />
               </View>
               <View style={styles.ownerButton}>
-                <ChunkyButton title={t('delete')} onPress={handleDelete} color="red" />
+                <ChunkyButton
+                  title={t('delete')}
+                  onPress={() => setConfirmingDelete(true)}
+                  color="red"
+                />
+              </View>
+            </View>
+          )}
+          {detail.mine && confirmingDelete && (
+            <View style={styles.confirmBox}>
+              <Text style={styles.confirmText}>{t('deleteConfirm')}</Text>
+              <View style={styles.ownerRow}>
+                <View style={styles.ownerButton}>
+                  <ChunkyButton
+                    title={t('cancel')}
+                    onPress={() => setConfirmingDelete(false)}
+                    color="gray"
+                  />
+                </View>
+                <View style={styles.ownerButton}>
+                  <ChunkyButton
+                    title={t('delete')}
+                    onPress={handleDeleteConfirmed}
+                    color="red"
+                    loading={busy}
+                  />
+                </View>
               </View>
             </View>
           )}
@@ -330,6 +351,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 16,
+  },
+  confirmBox: {
+    backgroundColor: '#FFE5E5',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+  },
+  confirmText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.redDark,
+    marginBottom: 12,
   },
   ownerButton: {
     flex: 1,
