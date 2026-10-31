@@ -74,12 +74,11 @@ async fn generate_without_api_key_reports_disabled() {
     assert!(json["error"].as_str().unwrap().contains("META_API_KEY"));
 
     // The subject is untouched: still ready, still empty.
-    let (status,): (String,) =
-        sqlx::query_as("SELECT status FROM subjects WHERE id = ?")
-            .bind(id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let (status,): (String,) = sqlx::query_as("SELECT status FROM subjects WHERE id = ?")
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(status, "ready");
 }
 
@@ -148,10 +147,7 @@ async fn svg_serves_cached_image() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers()["content-type"],
-        "image/svg+xml"
-    );
+    assert_eq!(response.headers()["content-type"], "image/svg+xml");
     let body = axum::body::to_bytes(response.into_body(), 8192)
         .await
         .unwrap();
@@ -268,9 +264,7 @@ async fn mock_lesson_backend(content: &str) -> (String, tokio::task::JoinHandle<
             }
         }),
     );
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     let handle = tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
@@ -278,8 +272,19 @@ async fn mock_lesson_backend(content: &str) -> (String, tokio::task::JoinHandle<
     (url, handle)
 }
 
+fn init_logging() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter("info")
+            .with_test_writer()
+            .try_init();
+    });
+}
+
 #[tokio::test]
 async fn generate_fans_out_and_tracks_progress() {
+    init_logging();
     // One document serves both the plan and the lesson calls; each parser
     // reads its own keys and ignores the rest.
     let content = r##"{

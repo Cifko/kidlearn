@@ -57,6 +57,7 @@ App (phone): install Expo Go, run `npx expo start`, scan the QR code.
 | `META_API_KEY`  | _(none)_                             | Enables AI generation            |
 | `META_MODEL`    | `muse-spark-1.3`                     | Generation model                 |
 | `GOOGLE_CLIENT_ID` | _(none)_                          | Enables Google login (web client ID) |
+| `RUST_LOG` | `info` | Log verbosity (`debug` shows every HTTP request) |
 
 ## Google login setup
 

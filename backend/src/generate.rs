@@ -11,14 +11,16 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
+use tracing::Instrument;
 
 use crate::{
     auth::AuthUser,
-    subjects::{subject_detail, SubjectDetail},
     error::AppError,
     meta::MetaClient,
     models::Subject,
-    prompts, AppState,
+    prompts,
+    subjects::{subject_detail, SubjectDetail},
+    AppState,
 };
 
 pub fn router() -> Router<AppState> {
@@ -95,11 +97,12 @@ async fn generate_subject(
     Path(id): Path<i64>,
     body: Option<Json<GenerateRequest>>,
 ) -> Result<(StatusCode, Json<SubjectDetail>), AppError> {
-    let client = MetaClient::from_config(&state.config).ok_or_else(|| {
-        AppError::ServiceUnavailable(
+    let Some(client) = MetaClient::from_config(&state.config) else {
+        tracing::warn!("generation requested but META_API_KEY is not set");
+        return Err(AppError::ServiceUnavailable(
             "META_API_KEY is not configured; generation is disabled".to_string(),
-        )
-    })?;
+        ));
+    };
 
     let subject = sqlx::query_as::<_, Subject>(
         "SELECT id, owner_id, title, description, language, visibility, status, lesson_count, tags_json, created_at
@@ -132,30 +135,43 @@ async fn generate_subject(
     .execute(&state.db)
     .await?;
 
+    tracing::info!(subject_id = id, lessons = count, "generation started");
     // The job runs in this process; a restart abandons it as `generating`.
     // A durable queue comes later.
     let pool = state.db.clone();
-    tokio::spawn(async move {
-        let outcome = run_lessons(
-            &pool,
-            &client,
-            &subject,
-            count,
-            min_questions,
-            max_questions,
-        )
-        .await;
-        let status = if outcome.is_ok() { "ready" } else { "failed" };
-        let _ = sqlx::query("UPDATE subjects SET status = ? WHERE id = ?")
-            .bind(status)
-            .bind(subject.id)
-            .execute(&pool)
-            .await;
-        if outcome.is_ok() {
-            // Best effort: anything still missing renders on first view.
-            pregenerate_svgs(&pool, &client, subject.id).await;
+    let span = tracing::info_span!("generate", subject_id = subject.id);
+    tokio::spawn(
+        async move {
+            match run_lessons(
+                &pool,
+                &client,
+                &subject,
+                count,
+                min_questions,
+                max_questions,
+            )
+            .await
+            {
+                Ok(()) => {
+                    let _ = sqlx::query("UPDATE subjects SET status = 'ready' WHERE id = ?")
+                        .bind(subject.id)
+                        .execute(&pool)
+                        .await;
+                    tracing::info!("generation ready");
+                    // Best effort: anything still missing renders on first view.
+                    pregenerate_svgs(&pool, &client, subject.id).await;
+                }
+                Err(err) => {
+                    let _ = sqlx::query("UPDATE subjects SET status = 'failed' WHERE id = ?")
+                        .bind(subject.id)
+                        .execute(&pool)
+                        .await;
+                    tracing::error!(error = ?err, "generation failed");
+                }
+            }
         }
-    });
+        .instrument(span),
+    );
 
     let detail = subject_detail(&state.db, auth.0.id, id).await?;
     Ok((StatusCode::ACCEPTED, Json(detail)))
@@ -191,16 +207,14 @@ async fn run_lessons(
     };
 
     let plan: PlanResponse = client
-        .chat_json(
-            &prompts::render_plan(&topic, &subject.language, count),
-            0.7,
-        )
+        .chat_json(&prompts::render_plan(&topic, &subject.language, count), 0.7)
         .await?;
     if plan.lessons.is_empty() {
         return Err(AppError::ServiceUnavailable(
             "generation backend returned no lessons".to_string(),
         ));
     }
+    tracing::info!(lessons = plan.lessons.len(), "plan ready");
 
     // Regenerating replaces the previous content.
     sqlx::query("DELETE FROM lessons WHERE subject_id = ?")
@@ -236,10 +250,14 @@ async fn run_lessons(
             min_questions,
             max_questions,
         };
-        handles.push(tokio::spawn(async move {
-            let _permit = permit;
-            generate_one_lesson(job).await
-        }));
+        let lesson_span = tracing::info_span!("lesson", position);
+        handles.push(tokio::spawn(
+            async move {
+                let _permit = permit;
+                generate_one_lesson(job).await
+            }
+            .instrument(lesson_span),
+        ));
     }
     for handle in handles {
         handle
@@ -264,7 +282,7 @@ async fn generate_one_lesson(job: LessonJob) -> Result<(), AppError> {
     .await?;
 
     let lesson_topic = if summary.is_empty() {
-        title
+        title.clone()
     } else {
         format!("{title}: {summary}")
     };
@@ -281,17 +299,12 @@ async fn generate_one_lesson(job: LessonJob) -> Result<(), AppError> {
             0.7,
         )
         .await?;
-    store_lesson(
-        &job.pool,
-        lesson_id,
-        &lesson,
-        job.max_questions as usize,
-    )
-    .await?;
+    store_lesson(&job.pool, lesson_id, &lesson, job.max_questions as usize).await?;
     sqlx::query("UPDATE subjects SET generated_lessons = generated_lessons + 1 WHERE id = ?")
         .bind(job.subject_id)
         .execute(&job.pool)
         .await?;
+    tracing::info!(title = %title, "lesson done");
     Ok(())
 }
 
@@ -308,12 +321,17 @@ async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_
     {
         Ok(rows) => rows,
         Err(err) => {
-            eprintln!("svg prefill lookup failed: {err}");
+            tracing::error!(%err, "svg prefill lookup failed");
             return;
         }
     };
+    if assets.is_empty() {
+        return;
+    }
+    tracing::info!(missing = assets.len(), "svg prefill started");
+    let total = assets.len();
     let semaphore = Arc::new(Semaphore::new(FAN_OUT));
-    let mut handles = Vec::with_capacity(assets.len());
+    let mut handles = Vec::with_capacity(total);
     for (id, spec) in assets {
         let Ok(permit) = semaphore.clone().acquire_owned().await else {
             break;
@@ -322,12 +340,17 @@ async fn pregenerate_svgs(pool: &sqlx::SqlitePool, client: &MetaClient, subject_
         let client = client.clone();
         handles.push(tokio::spawn(async move {
             let _permit = permit;
-            let _ = render_and_store_svg(&pool, &client, id, &spec).await;
+            render_and_store_svg(&pool, &client, id, &spec).await
         }));
     }
+    let mut failed = 0;
     for handle in handles {
-        let _ = handle.await;
+        match handle.await {
+            Ok(Ok(Some(_))) => {}
+            _ => failed += 1,
+        }
     }
+    tracing::info!(rendered = total - failed, failed, "svg prefill done");
 }
 
 /// Renders one SVG and caches it. `Ok(None)` means the model answered
@@ -384,7 +407,8 @@ async fn store_lesson(
             continue;
         }
         position += 1;
-        let options = serde_json::to_string(&question.options_asset_ids).unwrap_or_else(|_| "[]".to_string());
+        let options =
+            serde_json::to_string(&question.options_asset_ids).unwrap_or_else(|_| "[]".to_string());
         sqlx::query(
             "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset)
              VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -414,7 +438,9 @@ fn valid_question(question: &LessonQuestion, asset_ids: &HashSet<&str>) -> bool 
             .iter()
             .all(|id| asset_ids.contains(id.as_str()))
         && asset_ids.contains(question.correct_asset_id.as_str())
-        && question.options_asset_ids.contains(&question.correct_asset_id)
+        && question
+            .options_asset_ids
+            .contains(&question.correct_asset_id)
 }
 
 /// Serves an asset's SVG, generating and caching it on first request.
@@ -433,19 +459,22 @@ async fn asset_svg(
     .bind(auth.0.id)
     .fetch_optional(&state.db)
     .await?;
-    let (spec_json, cached) = row.ok_or_else(|| AppError::NotFound("asset not found".to_string()))?;
+    let (spec_json, cached) =
+        row.ok_or_else(|| AppError::NotFound("asset not found".to_string()))?;
     if let Some(svg) = cached {
         return Ok(svg_response(svg));
     }
 
-    let client = MetaClient::from_config(&state.config).ok_or_else(|| {
-        AppError::ServiceUnavailable(
+    let Some(client) = MetaClient::from_config(&state.config) else {
+        tracing::warn!("image requested but META_API_KEY is not set");
+        return Err(AppError::ServiceUnavailable(
             "META_API_KEY is not configured; image generation is disabled".to_string(),
-        )
-    })?;
+        ));
+    };
     let svg = render_and_store_svg(&state.db, &client, id, &spec_json)
         .await?
         .ok_or_else(|| {
+            tracing::warn!(asset_id = id, "generation backend returned invalid SVG");
             AppError::ServiceUnavailable("generation backend returned invalid SVG".to_string())
         })?;
     Ok(svg_response(svg))

@@ -36,9 +36,8 @@ impl MetaClient {
     ) -> Result<T, AppError> {
         let text = self.chat(prompt, temperature, true).await?;
         serde_json::from_str(extract_json(&text)).map_err(|err| {
-            AppError::ServiceUnavailable(format!(
-                "generation backend returned invalid JSON: {err}"
-            ))
+            tracing::error!(%err, "generation backend returned invalid JSON");
+            AppError::ServiceUnavailable(format!("generation backend returned invalid JSON: {err}"))
         })
     }
 
@@ -109,17 +108,20 @@ impl MetaClient {
             .send()
             .await
             .map_err(|err| {
+                tracing::error!(%err, "generation backend unreachable");
                 AppError::ServiceUnavailable(format!("generation backend unreachable: {err}"))
             })?;
         if !response.status().is_success() {
             let status = response.status();
             let detail = response.text().await.unwrap_or_default();
             let detail = detail.chars().take(300).collect::<String>();
+            tracing::warn!(%status, %detail, "generation backend error");
             return Err(AppError::ServiceUnavailable(format!(
                 "generation backend error {status}: {detail}"
             )));
         }
         let parsed: ChatResponse = response.json().await.map_err(|err| {
+            tracing::error!(%err, "generation backend sent a bad envelope");
             AppError::ServiceUnavailable(format!("generation backend sent a bad envelope: {err}"))
         })?;
         parsed
@@ -128,6 +130,7 @@ impl MetaClient {
             .next()
             .map(|choice| choice.message.content)
             .ok_or_else(|| {
+                tracing::error!("generation backend returned no choices");
                 AppError::ServiceUnavailable("generation backend returned no choices".to_string())
             })
     }

@@ -37,10 +37,13 @@ async fn dev_login(State(state): State<AppState>) -> Result<Json<Value>, AppErro
     .execute(&state.db)
     .await?;
 
-    let user = sqlx::query_as::<_, User>("SELECT id, email, name, created_at FROM users WHERE email = 'dev@localhost'")
-        .fetch_one(&state.db)
-        .await?;
+    let user = sqlx::query_as::<_, User>(
+        "SELECT id, email, name, created_at FROM users WHERE email = 'dev@localhost'",
+    )
+    .fetch_one(&state.db)
+    .await?;
 
+    tracing::info!(user_id = user.id, "dev login");
     Ok(issue_login(&state, &user))
 }
 
@@ -73,10 +76,12 @@ async fn google_login(
     State(state): State<AppState>,
     Json(input): Json<GoogleLoginRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let client_id =
-        state.config.google_client_id.clone().ok_or_else(|| {
-            AppError::ServiceUnavailable("Google login is not configured".to_string())
-        })?;
+    let Some(client_id) = state.config.google_client_id.clone() else {
+        tracing::warn!("google login attempted but GOOGLE_CLIENT_ID is not set");
+        return Err(AppError::ServiceUnavailable(
+            "Google login is not configured".to_string(),
+        ));
+    };
     if input.id_token.trim().is_empty() {
         return Err(AppError::BadRequest("id_token is required".to_string()));
     }
@@ -86,13 +91,20 @@ async fn google_login(
         input.id_token.trim()
     );
     let response = state.http.get(&url).send().await.map_err(|err| {
+        tracing::error!(%err, "google verification unreachable");
         AppError::ServiceUnavailable(format!("Google verification unreachable: {err}"))
     })?;
     if !response.status().is_success() {
+        tracing::warn!("google rejected the id token");
         return Err(AppError::Unauthorized);
     }
     let info: TokenInfo = response.json().await.map_err(|_| AppError::Unauthorized)?;
-    if info.aud != client_id || info.email_verified != "true" {
+    if info.aud != client_id {
+        tracing::warn!("google token has wrong audience");
+        return Err(AppError::Unauthorized);
+    }
+    if info.email_verified != "true" {
+        tracing::warn!("google token email not verified");
         return Err(AppError::Unauthorized);
     }
     let exp: u64 = info.exp.parse().map_err(|_| AppError::Unauthorized)?;
@@ -101,6 +113,7 @@ async fn google_login(
         .map(|d| d.as_secs())
         .unwrap_or(0);
     if exp <= now {
+        tracing::warn!("google token expired");
         return Err(AppError::Unauthorized);
     }
 
@@ -117,12 +130,12 @@ async fn google_login(
     .bind(&info.sub)
     .execute(&state.db)
     .await?;
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, email, name, created_at FROM users WHERE email = ?",
-    )
-    .bind(&info.email)
-    .fetch_one(&state.db)
-    .await?;
+    let user =
+        sqlx::query_as::<_, User>("SELECT id, email, name, created_at FROM users WHERE email = ?")
+            .bind(&info.email)
+            .fetch_one(&state.db)
+            .await?;
+    tracing::info!(user_id = user.id, "google login");
     Ok(issue_login(&state, &user))
 }
 
@@ -173,15 +186,16 @@ impl FromRequestParts<AppState> for AuthUser {
             .get(header::AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
             .ok_or(AppError::Unauthorized)?;
-        let token = header.strip_prefix("Bearer ").ok_or(AppError::Unauthorized)?;
+        let token = header
+            .strip_prefix("Bearer ")
+            .ok_or(AppError::Unauthorized)?;
         let claims = verify_token(token, &state.config.jwt_secret)?;
-        let user = sqlx::query_as::<_, User>(
-            "SELECT id, email, name, created_at FROM users WHERE id = ?",
-        )
-        .bind(claims.sub)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::Unauthorized)?;
+        let user =
+            sqlx::query_as::<_, User>("SELECT id, email, name, created_at FROM users WHERE id = ?")
+                .bind(claims.sub)
+                .fetch_optional(&state.db)
+                .await?
+                .ok_or(AppError::Unauthorized)?;
         Ok(AuthUser(user))
     }
 }

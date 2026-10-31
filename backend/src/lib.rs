@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod subjects;
 pub mod config;
 pub mod db;
 pub mod error;
@@ -8,10 +7,11 @@ pub mod meta;
 pub mod models;
 pub mod progress;
 pub mod prompts;
+pub mod subjects;
 
 use axum::{routing::get, Json, Router};
 use serde_json::{json, Value};
-use tower_http::cors::CorsLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -38,6 +38,7 @@ pub fn create_app(state: AppState) -> Router {
         .merge(generate::router())
         .merge(progress::router())
         .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 
