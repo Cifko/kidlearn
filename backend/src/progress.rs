@@ -190,12 +190,10 @@ async fn get_lesson(
         let options: Vec<LessonOption> = keys
             .into_iter()
             .filter_map(|key| {
-                asset_ids
-                    .get(key.as_str())
-                    .map(|asset_id| LessonOption {
-                        asset_key: key,
-                        svg_url: format!("/assets/{asset_id}/svg"),
-                    })
+                asset_ids.get(key.as_str()).map(|asset_id| LessonOption {
+                    asset_key: key,
+                    svg_url: format!("/assets/{asset_id}/svg"),
+                })
             })
             .collect();
         if options.is_empty() {
@@ -305,15 +303,15 @@ async fn record_activity(
     )
 }
 
-async fn get_stats(
-    auth: AuthUser,
-    State(state): State<AppState>,
-) -> Result<Json<Stats>, AppError> {
+async fn get_stats(auth: AuthUser, State(state): State<AppState>) -> Result<Json<Stats>, AppError> {
     let stats = sqlx::query_as::<_, Stats>("SELECT xp, streak_days FROM stats WHERE user_id = ?")
         .bind(auth.0.id)
         .fetch_optional(&state.db)
         .await?
-        .unwrap_or(Stats { xp: 0, streak_days: 0 });
+        .unwrap_or(Stats {
+            xp: 0,
+            streak_days: 0,
+        });
     Ok(Json(stats))
 }
 

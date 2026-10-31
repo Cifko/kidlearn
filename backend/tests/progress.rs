@@ -66,14 +66,19 @@ async fn seed() -> Seed {
             .await
             .unwrap();
     }
-    sqlx::query("INSERT INTO assets (lesson_id, asset_key, spec_json) VALUES (?, 'yellow_star', '{}')")
-        .bind(sub2)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "INSERT INTO assets (lesson_id, asset_key, spec_json) VALUES (?, 'yellow_star', '{}')",
+    )
+    .bind(sub2)
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let mut questions = Vec::new();
-    for (index, correct) in ["red_ball", "blue_cube", "green_cone"].into_iter().enumerate() {
+    for (index, correct) in ["red_ball", "blue_cube", "green_cone"]
+        .into_iter()
+        .enumerate()
+    {
         let position = index as i64 + 1;
         let (id,): (i64,) = sqlx::query_as(
             "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset)
@@ -101,7 +106,11 @@ async fn seed() -> Seed {
     }
 }
 
-async fn get_json(app: &axum::Router, token: &str, path: String) -> (StatusCode, serde_json::Value) {
+async fn get_json(
+    app: &axum::Router,
+    token: &str,
+    path: String,
+) -> (StatusCode, serde_json::Value) {
     let response = app
         .clone()
         .oneshot(
@@ -151,12 +160,8 @@ async fn answer(
 #[tokio::test]
 async fn lesson_returns_questions_without_answers() {
     let seed = seed().await;
-    let (status, lesson) = get_json(
-        &seed.app,
-        &seed.token,
-        format!("/lessons/{}", seed.sub1),
-    )
-    .await;
+    let (status, lesson) =
+        get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub1)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(lesson["title"], "Counting");
     let questions = lesson["questions"].as_array().unwrap();
@@ -178,12 +183,7 @@ async fn lesson_returns_questions_without_answers() {
 #[tokio::test]
 async fn second_lesson_locks_until_first_is_attempted() {
     let seed = seed().await;
-    let (status, _) = get_json(
-        &seed.app,
-        &seed.token,
-        format!("/lessons/{}", seed.sub2),
-    )
-    .await;
+    let (status, _) = get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub2)).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 
     // Answering a locked lesson is rejected too.
@@ -196,7 +196,14 @@ async fn second_lesson_locks_until_first_is_attempted() {
     .fetch_one(&seed.pool)
     .await
     .unwrap();
-    let (status, _) = answer(&seed.app, &seed.token, seed.sub2, sub2_question, "yellow_star").await;
+    let (status, _) = answer(
+        &seed.app,
+        &seed.token,
+        seed.sub2,
+        sub2_question,
+        "yellow_star",
+    )
+    .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 
     for (index, question_id) in seed.questions.iter().enumerate() {
@@ -206,19 +213,21 @@ async fn second_lesson_locks_until_first_is_attempted() {
         assert_eq!(result["correct"], true);
     }
 
-    let (status, _) = get_json(
-        &seed.app,
-        &seed.token,
-        format!("/lessons/{}", seed.sub2),
-    )
-    .await;
+    let (status, _) = get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub2)).await;
     assert_eq!(status, StatusCode::OK);
 }
 
 #[tokio::test]
 async fn wrong_answer_reveals_correct_key_and_records_progress() {
     let seed = seed().await;
-    let (status, result) = answer(&seed.app, &seed.token, seed.sub1, seed.questions[0], "blue_cube").await;
+    let (status, result) = answer(
+        &seed.app,
+        &seed.token,
+        seed.sub1,
+        seed.questions[0],
+        "blue_cube",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result["correct"], false);
     assert_eq!(result["correct_asset_key"], "red_ball");
@@ -239,7 +248,14 @@ async fn wrong_answer_reveals_correct_key_and_records_progress() {
     assert_eq!(subs[1]["unlocked"], false);
 
     // Re-answering overwrites the attempt.
-    let (status, result) = answer(&seed.app, &seed.token, seed.sub1, seed.questions[0], "red_ball").await;
+    let (status, result) = answer(
+        &seed.app,
+        &seed.token,
+        seed.sub1,
+        seed.questions[0],
+        "red_ball",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result["correct"], true);
     let (_, progress) = get_json(
@@ -298,25 +314,49 @@ async fn lesson_requires_auth_and_respects_visibility() {
 async fn xp_awarded_once_per_question() {
     let seed = seed().await;
 
-    let (status, result) =
-        answer(&seed.app, &seed.token, seed.sub1, seed.questions[0], "red_ball").await;
+    let (status, result) = answer(
+        &seed.app,
+        &seed.token,
+        seed.sub1,
+        seed.questions[0],
+        "red_ball",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result["xp_earned"], 10);
     assert_eq!(result["total_xp"], 10);
 
     // Re-answering correctly earns nothing.
-    let (_, result) =
-        answer(&seed.app, &seed.token, seed.sub1, seed.questions[0], "red_ball").await;
+    let (_, result) = answer(
+        &seed.app,
+        &seed.token,
+        seed.sub1,
+        seed.questions[0],
+        "red_ball",
+    )
+    .await;
     assert_eq!(result["xp_earned"], 0);
     assert_eq!(result["total_xp"], 10);
 
     // Wrong first, then correct: XP on the first correct attempt.
-    let (_, result) =
-        answer(&seed.app, &seed.token, seed.sub1, seed.questions[1], "red_ball").await;
+    let (_, result) = answer(
+        &seed.app,
+        &seed.token,
+        seed.sub1,
+        seed.questions[1],
+        "red_ball",
+    )
+    .await;
     assert_eq!(result["correct"], false);
     assert_eq!(result["xp_earned"], 0);
-    let (_, result) =
-        answer(&seed.app, &seed.token, seed.sub1, seed.questions[1], "blue_cube").await;
+    let (_, result) = answer(
+        &seed.app,
+        &seed.token,
+        seed.sub1,
+        seed.questions[1],
+        "blue_cube",
+    )
+    .await;
     assert_eq!(result["xp_earned"], 10);
     assert_eq!(result["total_xp"], 20);
 
@@ -329,7 +369,14 @@ async fn xp_awarded_once_per_question() {
 #[tokio::test]
 async fn streak_extends_on_consecutive_days_and_resets_after_gap() {
     let seed = seed().await;
-    answer(&seed.app, &seed.token, seed.sub1, seed.questions[0], "red_ball").await;
+    answer(
+        &seed.app,
+        &seed.token,
+        seed.sub1,
+        seed.questions[0],
+        "red_ball",
+    )
+    .await;
 
     // Pretend the last activity was yesterday with a 4-day streak.
     sqlx::query(
@@ -339,7 +386,14 @@ async fn streak_extends_on_consecutive_days_and_resets_after_gap() {
     .execute(&seed.pool)
     .await
     .unwrap();
-    answer(&seed.app, &seed.token, seed.sub1, seed.questions[1], "blue_cube").await;
+    answer(
+        &seed.app,
+        &seed.token,
+        seed.sub1,
+        seed.questions[1],
+        "blue_cube",
+    )
+    .await;
     let (_, stats) = get_json(&seed.app, &seed.token, "/stats".to_string()).await;
     assert_eq!(stats["streak_days"], 5);
 
@@ -351,7 +405,14 @@ async fn streak_extends_on_consecutive_days_and_resets_after_gap() {
     .execute(&seed.pool)
     .await
     .unwrap();
-    answer(&seed.app, &seed.token, seed.sub1, seed.questions[2], "green_cone").await;
+    answer(
+        &seed.app,
+        &seed.token,
+        seed.sub1,
+        seed.questions[2],
+        "green_cone",
+    )
+    .await;
     let (_, stats) = get_json(&seed.app, &seed.token, "/stats".to_string()).await;
     assert_eq!(stats["streak_days"], 1);
 }

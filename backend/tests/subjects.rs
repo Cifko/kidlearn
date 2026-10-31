@@ -31,7 +31,11 @@ async fn login_token(app: &axum::Router) -> String {
     json["token"].as_str().unwrap().to_string()
 }
 
-async fn create_subject(app: &axum::Router, token: &str, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+async fn create_subject(
+    app: &axum::Router,
+    token: &str,
+    body: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
     let response = app
         .clone()
         .oneshot(
@@ -260,8 +264,18 @@ async fn delete_removes_own_subject_only() {
 async fn search_filters_visible_subjects() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;
-    create_subject(&app, &token, json!({ "title": "Prvouka", "description": "animals and plants" })).await;
-    create_subject(&app, &token, json!({ "title": "Math", "description": "counting to ten" })).await;
+    create_subject(
+        &app,
+        &token,
+        json!({ "title": "Prvouka", "description": "animals and plants" }),
+    )
+    .await;
+    create_subject(
+        &app,
+        &token,
+        json!({ "title": "Math", "description": "counting to ten" }),
+    )
+    .await;
 
     sqlx::query("INSERT INTO users (email, name) VALUES ('other@example.com', 'Other')")
         .execute(&pool)
@@ -502,9 +516,7 @@ async fn mock_meta(content: &str) -> (String, tokio::task::JoinHandle<()>) {
             }
         }),
     );
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     let handle = tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
