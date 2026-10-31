@@ -67,6 +67,8 @@ struct LessonQuestion {
     #[serde(rename = "type", default)]
     qtype: String,
     #[serde(default)]
+    focus: String,
+    #[serde(default)]
     options_asset_ids: Vec<String>,
     #[serde(default)]
     correct_asset_id: String,
@@ -437,6 +439,7 @@ async fn store_lesson(
         if !valid_question(question, &asset_ids) {
             continue;
         }
+        tracing::debug!(qid = %question.id, focus = %question.focus, "question focus");
         position += 1;
         let options =
             serde_json::to_string(&question.options_asset_ids).unwrap_or_else(|_| "[]".to_string());
@@ -463,6 +466,7 @@ async fn store_lesson(
 
 fn valid_question(question: &LessonQuestion, asset_ids: &HashSet<&str>) -> bool {
     !question.text.trim().is_empty()
+        && !question.focus.trim().is_empty()
         && !question.options_asset_ids.is_empty()
         && question
             .options_asset_ids

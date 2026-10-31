@@ -291,9 +291,9 @@ const LESSON_FIXTURE: &str = r##"{
         {"position": 3, "title": "L3", "summary": "third"}
     ],
     "questions": [
-        {"id": "q1", "text": "Pick a", "type": "multiple_choice_image",
+        {"id": "q1", "text": "Pick a", "type": "multiple_choice_image", "focus": "name object a",
          "options_asset_ids": ["a", "b"], "correct_asset_id": "a"},
-        {"id": "q2", "text": "Pick b", "type": "multiple_choice_image",
+        {"id": "q2", "text": "Pick b", "type": "multiple_choice_image", "focus": "name object b",
          "options_asset_ids": ["a", "b"], "correct_asset_id": "b"}
     ],
     "assets": [

@@ -62,6 +62,17 @@ mod tests {
     }
 
     #[test]
+    fn alignment_rules_survive_prompt_edits() {
+        let plan = render_plan("math", "en", 20);
+        assert!(plan.contains("tangential"));
+        assert!(plan.contains("checkable skill"));
+        let questions = render_questions("math", "addition", "en", 5, 10);
+        assert!(questions.contains("differ ONLY in the tested attribute"));
+        assert!(questions.contains("FORBIDDEN"));
+        assert!(questions.contains("\"focus\""));
+    }
+
+    #[test]
     fn svg_prompt_embeds_asset_spec() {
         let prompt = render_svg(r#"{"id":"red_ball"}"#);
         assert!(prompt.contains(r#"{"id":"red_ball"}"#));

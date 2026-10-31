@@ -16,6 +16,14 @@ STRICT RULES:
 4. Keep titles short (2-6 words) and summaries to one simple sentence a child can understand.
 5. Every lesson must be narrow enough to teach with 5-10 small questions.
 
+SUBJECT ALIGNMENT (no drift):
+6. Every lesson must be a direct component or prerequisite of SUBJECT. If a lesson could be removed without hurting mastery of SUBJECT, it does not belong here: replace it.
+7. No tangential "fun" topics, no generic filler (no "introduction to learning", no "fun with shapes" unless the subject is shapes).
+8. Each summary must name the concrete, checkable skill the child gains, using the subject's own vocabulary.
+   BAD summary: "Explores numbers in a playful way."
+   GOOD summary: "Counts objects from 1 to 20 without skipping."
+9. Each title must signal that same skill, so a parent reading only the titles sees the full path through SUBJECT.
+
 OUTPUT SCHEMA:
 {
   "lessons": [

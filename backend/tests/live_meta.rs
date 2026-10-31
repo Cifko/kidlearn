@@ -153,6 +153,26 @@ async fn live_generate_and_render_svg() {
         .collect();
     assert!(ids.contains(&id));
 
+    // The real model honors the focus contract on every lesson call.
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/debug/llm-calls?kind=questions")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 262144)
+        .await
+        .unwrap();
+    let calls: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let calls = calls.as_array().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert!(calls[0]["response"].as_str().unwrap().contains("\"focus\""));
+
     let (asset_id,): (i64,) = sqlx::query_as("SELECT id FROM assets LIMIT 1")
         .fetch_one(&pool)
         .await
