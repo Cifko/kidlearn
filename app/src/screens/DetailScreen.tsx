@@ -142,7 +142,7 @@ export function DetailScreen({
           <Text style={styles.meta}>
             {detail.owner_name} · {detail.language.toUpperCase()} ·{' '}
             {detail.visibility === 'public' ? t('public') : t('private')}
-            {detail.grade != null && ` · ${t('grade')} ${detail.grade}`}
+            {detail.grade != null && ` · ${t('grade')} ${detail.grade === 5 ? '5+' : detail.grade}`}
             {detail.modality === 'text_only' && ` · ${t('picturesTextOnly')}`}
           </Text>
           {detail.description.length > 0 && (

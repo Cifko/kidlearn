@@ -3,8 +3,19 @@ const QUESTIONS: &str = include_str!("../prompts/questions.txt");
 const IMAGE: &str = include_str!("../prompts/image.txt");
 const SEARCH: &str = include_str!("../prompts/search.txt");
 
-pub fn render_plan(subject: &str, language: &str, count: i64) -> String {
+/// Audience line for the prompts. Grade 5 means high school and above.
+fn audience_label(grade: Option<i64>) -> &'static str {
+    match grade {
+        Some(1) | Some(2) => "a young child (grade 1-2, early reader)",
+        Some(3) | Some(4) => "an older child (grade 3-4)",
+        Some(5) => "an older student (high school, university, or adult)",
+        _ => "a general student of unknown age",
+    }
+}
+
+pub fn render_plan(subject: &str, language: &str, count: i64, grade: Option<i64>) -> String {
     PLAN.replace("{subject}", subject)
+        .replace("{audience}", audience_label(grade))
         .replace("{language}", language)
         .replace("{count}", &count.to_string())
 }
@@ -18,9 +29,6 @@ pub fn render_questions(
     grade: Option<i64>,
     modality: &str,
 ) -> String {
-    let grade = grade
-        .map(|grade| format!("grade {grade}"))
-        .unwrap_or_else(|| "unspecified".to_string());
     let modality = match modality {
         "text_only" => "text only",
         _ => "auto",
@@ -28,7 +36,7 @@ pub fn render_questions(
     QUESTIONS
         .replace("{subject}", subject)
         .replace("{lesson}", lesson)
-        .replace("{grade}", &grade)
+        .replace("{audience}", audience_label(grade))
         .replace("{modality}", modality)
         .replace("{language}", language)
         .replace("{min_questions}", &min_questions.to_string())
@@ -52,13 +60,18 @@ mod tests {
 
     #[test]
     fn plan_prompt_fills_all_placeholders() {
-        let prompt = render_plan("prvouka", "sk", 20);
+        let prompt = render_plan("prvouka", "sk", 20, Some(2));
         assert!(prompt.contains("prvouka"));
         assert!(prompt.contains("MUST be written in sk"));
         assert!(prompt.contains("COUNT = 20"));
+        assert!(prompt.contains("AUDIENCE = a young child (grade 1-2, early reader)"));
         assert!(!prompt.contains("{subject}"));
+        assert!(!prompt.contains("{audience}"));
         assert!(!prompt.contains("{language}"));
         assert!(!prompt.contains("{count}"));
+
+        let prompt = render_plan("analysis", "en", 20, Some(5));
+        assert!(prompt.contains("older student (high school, university, or adult)"));
     }
 
     #[test]
@@ -67,22 +80,22 @@ mod tests {
         assert!(prompt.contains("addition"));
         assert!(prompt.contains("MIN_QUESTIONS = 5"));
         assert!(prompt.contains("MAX_QUESTIONS = 10"));
-        assert!(prompt.contains("GRADE = grade 2"));
+        assert!(prompt.contains("AUDIENCE = a young child (grade 1-2, early reader)"));
         assert!(prompt.contains("MODALITY = auto"));
         assert!(!prompt.contains("{lesson}"));
-        assert!(!prompt.contains("{grade}"));
+        assert!(!prompt.contains("{audience}"));
         assert!(!prompt.contains("{modality}"));
         assert!(!prompt.contains("{min_questions}"));
         assert!(!prompt.contains("{max_questions}"));
 
         let prompt = render_questions("math", "addition", "en", 5, 10, None, "text_only");
-        assert!(prompt.contains("GRADE = unspecified"));
+        assert!(prompt.contains("AUDIENCE = a general student of unknown age"));
         assert!(prompt.contains("MODALITY = text only"));
     }
 
     #[test]
     fn alignment_rules_survive_prompt_edits() {
-        let plan = render_plan("math", "en", 20);
+        let plan = render_plan("math", "en", 20, None);
         assert!(plan.contains("tangential"));
         assert!(plan.contains("checkable skill"));
         let questions = render_questions("math", "addition", "en", 5, 10, None, "auto");

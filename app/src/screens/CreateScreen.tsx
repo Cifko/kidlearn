@@ -21,7 +21,7 @@ export function CreateScreen({
   const [description, setDescription] = useState('');
   const [tagsText, setTagsText] = useState('');
   const [contentLang, setContentLang] = useState<Lang>(lang);
-  const [grade, setGrade] = useState<'any' | '1' | '2' | '3' | '4'>('any');
+  const [grade, setGrade] = useState<'any' | '1' | '2' | '3' | '4' | '5'>('any');
   const [modality, setModality] = useState<'auto' | 'text_only'>('auto');
   const [count, setCount] = useState(20);
   const [phase, setPhase] = useState<Phase>('editing');
@@ -108,13 +108,14 @@ export function CreateScreen({
         />
       </Field>
       <Field label={t('grade')}>
-        <Segmented<'any' | '1' | '2' | '3' | '4'>
+        <Segmented<'any' | '1' | '2' | '3' | '4' | '5'>
           options={[
             { value: 'any', label: t('gradeAny') },
             { value: '1', label: '1' },
             { value: '2', label: '2' },
             { value: '3', label: '3' },
             { value: '4', label: '4' },
+            { value: '5', label: '5+' },
           ]}
           value={grade}
           onChange={setGrade}

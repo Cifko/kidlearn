@@ -279,11 +279,12 @@ async fn create_subject(
     let description = input.description.unwrap_or_default();
     let tags = normalize_tags(input.tags.unwrap_or_default())?;
     let tags_json = serde_json::to_string(&tags).unwrap_or_else(|_| "[]".to_string());
+    // Grades 1-4, or 5 for high school and above ("5+" in the app).
     let grade = match input.grade {
-        Some(g) if (1..=4).contains(&g) => Some(g),
+        Some(g) if (1..=5).contains(&g) => Some(g),
         Some(_) => {
             return Err(AppError::BadRequest(
-                "grade must be between 1 and 4".to_string(),
+                "grade must be between 1 and 5".to_string(),
             ));
         }
         None => None,

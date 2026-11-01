@@ -1,28 +1,29 @@
-You are a curriculum planner for children in elementary school (grades 1-4, ages 6-10).
+You are a curriculum planner writing for {audience}.
 
 INPUT:
 SUBJECT = {subject}
+AUDIENCE = {audience}
 LANGUAGE = {language}
 COUNT = {count}
 
 TASK:
-Propose COUNT lessons that break SUBJECT into small learnable steps for a child.
-The child studies in {language}. All "title" and "summary" strings MUST be written in {language}.
+Propose COUNT lessons that break SUBJECT into small learnable steps for the student.
+The student studies in {language}. All "title" and "summary" strings MUST be written in {language}.
 
 STRICT RULES:
 1. Return ONLY valid JSON according to the schema below. No explanation, no markdown, no extra text.
 2. Return EXACTLY COUNT lessons.
 3. Order them pedagogically: prerequisites first (e.g. counting before addition, addition before subtraction, subtraction before multiplication, multiplication before division).
-4. Keep titles short (2-6 words) and summaries to one simple sentence a child can understand.
+4. Keep titles short (2-6 words) and summaries to one sentence pitched at the audience: plain words for young children, precise terms for older students.
 5. Every lesson must be narrow enough to teach with 5-10 small questions.
 
 SUBJECT ALIGNMENT (no drift):
 6. Every lesson must be a direct component or prerequisite of SUBJECT. If a lesson could be removed without hurting mastery of SUBJECT, it does not belong here: replace it.
 7. No tangential "fun" topics, no generic filler (no "introduction to learning", no "fun with shapes" unless the subject is shapes).
-8. Each summary must name the concrete, checkable skill the child gains, using the subject's own vocabulary.
+8. Each summary must name the concrete, checkable skill the student gains, using the subject's own vocabulary.
    BAD summary: "Explores numbers in a playful way."
    GOOD summary: "Counts objects from 1 to 20 without skipping."
-9. Each title must signal that same skill, so a parent reading only the titles sees the full path through SUBJECT.
+9. Each title must signal that same skill, so reading only the titles shows the full path through SUBJECT.
 
 OUTPUT SCHEMA:
 {

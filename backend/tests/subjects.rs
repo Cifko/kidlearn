@@ -111,7 +111,12 @@ async fn create_stores_and_validates_grade() {
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(created["grade"], 2);
 
-    for bad in [0, 5, -1] {
+    let (status, created) =
+        create_subject(&app, &token, json!({ "title": "Older", "grade": 5 })).await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["grade"], 5);
+
+    for bad in [0, 6, -1] {
         let (status, _) =
             create_subject(&app, &token, json!({ "title": "Bad grade", "grade": bad })).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);

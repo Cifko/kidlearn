@@ -232,7 +232,7 @@ async fn run_lessons(
     let plan: PlanResponse = client
         .chat_json(
             &ctx,
-            &prompts::render_plan(&topic, &subject.language, count),
+            &prompts::render_plan(&topic, &subject.language, count, subject.grade),
             0.7,
         )
         .await?;
