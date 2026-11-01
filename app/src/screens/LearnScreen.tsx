@@ -7,6 +7,19 @@ import { ChunkyButton, ErrorBox, Screen } from '../ui';
 
 const HEARTS_PER_RUN = 3;
 
+// Long answers shrink instead of overflowing: the size fits the longest
+// unbreakable word into the 150px button (~132px usable at ~0.6px per
+// point for heavy type) and steps down for longer wrapping phrases.
+// Plain arithmetic on purpose: adjustsFontSizeToFit is silently ignored
+// on web, so a prop-based fix truncates instead of shrinking there.
+function optionFontSize(text: string): number {
+  const longest = Math.max(1, ...text.split(/\s+/).map((word) => word.length));
+  const widthCapped = Math.floor(132 / (0.6 * longest));
+  const totalCapped =
+    text.length <= 8 ? 26 : text.length <= 16 ? 22 : text.length <= 30 ? 18 : 14;
+  return Math.max(10, Math.min(26, widthCapped, totalCapped));
+}
+
 export function LearnScreen({
   token,
   lessonId,
@@ -196,12 +209,7 @@ export function LearnScreen({
                   ]}
                 >
                   {option.text != null ? (
-                    <Text
-                      style={styles.optionText}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.4}
-                    >
+                    <Text style={[styles.optionText, { fontSize: optionFontSize(option.text) }]}>
                       {option.text}
                     </Text>
                   ) : option.image_url != null && images[option.image_url] ? (
