@@ -79,3 +79,50 @@ export function fmt(n: number): string {
   const v = Object.is(n, -0) ? 0 : n;
   return String(parseFloat(v.toPrecision(4)));
 }
+
+export interface LabelCandidate {
+  x: number;
+  y: number;
+  text: string;
+  anchor: 'start' | 'middle' | 'end';
+  /** Pixels per character and per line for the label's font size. */
+  charWidth: number;
+  lineHeight: number;
+}
+
+interface Box {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
+function boxesOverlap(a: Box, b: Box): boolean {
+  return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+}
+
+/**
+ * Greedy label placement: walks candidates top to bottom, keeping a label
+ * only when its box overlaps nothing kept so far. Overlapping labels come
+ * out as a legible subset instead of an unreadable pile.
+ */
+export function placeLabels(cands: LabelCandidate[]): LabelCandidate[] {
+  const placed: Box[] = [];
+  const kept: LabelCandidate[] = [];
+  const sorted = [...cands].sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const c of sorted) {
+    const w = c.text.length * c.charWidth;
+    const x0 = c.anchor === 'end' ? c.x - w : c.anchor === 'middle' ? c.x - w / 2 : c.x;
+    const box: Box = { x0, x1: x0 + w, y0: c.y - c.lineHeight * 0.8, y1: c.y + c.lineHeight * 0.2 };
+    if (placed.every((p) => !boxesOverlap(box, p))) {
+      placed.push(box);
+      kept.push(c);
+    }
+  }
+  return kept;
+}
+
+/** A label too long to ever fit is cut rather than spilling everywhere. */
+export function truncateLabel(text: string, max = 20): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}

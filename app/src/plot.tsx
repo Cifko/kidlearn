@@ -1,7 +1,15 @@
 import React, { useMemo } from 'react';
 import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 import { colors } from './theme';
-import { fmt, gridLines, parseExpr, sampleCurve } from './plot-math';
+import {
+  fmt,
+  gridLines,
+  LabelCandidate,
+  parseExpr,
+  placeLabels,
+  sampleCurve,
+  truncateLabel,
+} from './plot-math';
 
 export interface PlotFunctionSpec {
   expr: string;
@@ -56,23 +64,36 @@ export function PlotView({ plot, width }: { plot: PlotSpec; width: number }) {
     const toX = (x: number) => PAD.left + ((x - xMin) / (xMax - xMin)) * innerW;
     const toY = (y: number) => PAD.top + (1 - (y - yMin) / (yMax - yMin)) * innerH;
 
+    // Every text element competes in one placement pass, so labels can
+    // never pile onto each other no matter how dense the spec is.
+    const labelStyles = new Map<
+      LabelCandidate,
+      { key: string; fontSize: number; fill: string; fontWeight?: 'bold' }
+    >();
+    const labels: LabelCandidate[] = [];
+    const addLabel = (
+      cand: LabelCandidate,
+      style: { key: string; fontSize: number; fill: string; fontWeight?: 'bold' },
+    ) => {
+      labels.push(cand);
+      labelStyles.set(cand, style);
+    };
+
     const grid: React.ReactNode[] = [];
     for (const v of gridLines(xMin, xMax, 5)) {
       const px = toX(v);
       grid.push(<Line key={`xg${v}`} x1={px} y1={PAD.top} x2={px} y2={height - PAD.bottom} stroke={GRID_COLOR} strokeWidth={1} />);
-      grid.push(
-        <SvgText key={`xl${v}`} x={px} y={height - PAD.bottom + 16} fontSize={10} fill={LABEL_COLOR} textAnchor="middle">
-          {fmt(v)}
-        </SvgText>,
+      addLabel(
+        { x: px, y: height - PAD.bottom + 16, text: fmt(v), anchor: 'middle', charWidth: 6, lineHeight: 13 },
+        { key: `xl${v}`, fontSize: 10, fill: LABEL_COLOR },
       );
     }
     for (const v of gridLines(yMin, yMax, 4)) {
       const py = toY(v);
       grid.push(<Line key={`yg${v}`} x1={PAD.left} y1={py} x2={width - PAD.right} y2={py} stroke={GRID_COLOR} strokeWidth={1} />);
-      grid.push(
-        <SvgText key={`yl${v}`} x={PAD.left - 6} y={py + 3.5} fontSize={10} fill={LABEL_COLOR} textAnchor="end">
-          {fmt(v)}
-        </SvgText>,
+      addLabel(
+        { x: PAD.left - 6, y: py + 3.5, text: fmt(v), anchor: 'end', charWidth: 6, lineHeight: 13 },
+        { key: `yl${v}`, fontSize: 10, fill: LABEL_COLOR },
       );
     }
 
@@ -117,28 +138,71 @@ export function PlotView({ plot, width }: { plot: PlotSpec; width: number }) {
       return null;
     }
 
+    // Dots outside their own axes are model nonsense: skip rather than
+    // draw in the label gutter.
     const dots = points
-      .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
-      .map((p, i) => (
-        <G key={`p${i}`}>
-          <Circle cx={toX(p.x)} cy={toY(p.y)} r={5} fill={POINT_COLOR} stroke="#FFFFFF" strokeWidth={2} />
-          {p.label !== '' && (
-            <SvgText x={toX(p.x) + 9} y={toY(p.y) - 7} fontSize={11} fontWeight="bold" fill={POINT_COLOR}>
-              {p.label}
-            </SvgText>
-          )}
-        </G>
-      ));
+      .filter(
+        (p) =>
+          Number.isFinite(p.x) &&
+          Number.isFinite(p.y) &&
+          p.x >= xMin &&
+          p.x <= xMax &&
+          p.y >= yMin &&
+          p.y <= yMax,
+      )
+      .map((p, i) => {
+        if (p.label !== '') {
+          addLabel(
+            {
+              x: toX(p.x) + 9,
+              y: toY(p.y) - 7,
+              text: truncateLabel(p.label),
+              anchor: 'start',
+              charWidth: 6.8,
+              lineHeight: 14,
+            },
+            { key: `pl${i}`, fontSize: 11, fill: POINT_COLOR, fontWeight: 'bold' },
+          );
+        }
+        return (
+          <Circle
+            key={`p${i}`}
+            cx={toX(p.x)}
+            cy={toY(p.y)}
+            r={5}
+            fill={POINT_COLOR}
+            stroke="#FFFFFF"
+            strokeWidth={2}
+          />
+        );
+      });
 
-    const labeled = functions
+    const legendEntries = functions
       .map((fn, i) => ({ fn, i }))
-      .filter(({ fn }) => fn.label !== '');
+      .filter(({ fn }) => fn.label !== '')
+      .map(({ fn, i }, row) => {
+        const cand: LabelCandidate = {
+          x: PAD.left + 32,
+          y: PAD.top + 12 + row * 17,
+          text: truncateLabel(fn.label, 28),
+          anchor: 'start',
+          charWidth: 6.8,
+          lineHeight: 14,
+        };
+        addLabel(cand, { key: `lg${i}`, fontSize: 11, fill: LABEL_COLOR });
+        return { cand, i, row };
+      });
+
+    const kept = placeLabels(labels);
+    const keptSet = new Set(kept);
     const legend =
-      labeled.length === 0 ? null : (
+      legendEntries.length === 0 ? null : (
         <G key="legend">
-          {labeled.map(({ fn, i }, row) => (
-            <G key={`lg${i}`}>
+          {legendEntries
+            .filter((entry) => keptSet.has(entry.cand))
+            .map(({ i, row }) => (
               <Line
+                key={`lgl${i}`}
                 x1={PAD.left + 6}
                 y1={PAD.top + 8 + row * 17}
                 x2={PAD.left + 26}
@@ -147,15 +211,31 @@ export function PlotView({ plot, width }: { plot: PlotSpec; width: number }) {
                 strokeWidth={3}
                 strokeLinecap="round"
               />
-              <SvgText x={PAD.left + 32} y={PAD.top + 12 + row * 17} fontSize={11} fill={LABEL_COLOR}>
-                {fn.label}
-              </SvgText>
-            </G>
-          ))}
+            ))}
         </G>
       );
 
-    return { height, grid, axes, curves, dots, legend };
+    const texts = kept.map((cand) => {
+      const style = labelStyles.get(cand);
+      if (!style) {
+        return null;
+      }
+      return (
+        <SvgText
+          key={style.key}
+          x={cand.x}
+          y={cand.y}
+          fontSize={style.fontSize}
+          fill={style.fill}
+          fontWeight={style.fontWeight}
+          textAnchor={cand.anchor}
+        >
+          {cand.text}
+        </SvgText>
+      );
+    });
+
+    return { height, grid, axes, curves, dots, legend, texts };
   }, [plot, width]);
 
   if (drawing === null) {
@@ -180,6 +260,7 @@ export function PlotView({ plot, width }: { plot: PlotSpec; width: number }) {
       {drawing.curves}
       {drawing.dots}
       {drawing.legend}
+      {drawing.texts}
     </Svg>
   );
 }
