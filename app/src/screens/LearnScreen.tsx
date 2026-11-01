@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { api, ApiError, AnswerResult, Lesson } from '../api';
 import { useLang } from '../i18n';
+import { MathText, stripMathForMeasure } from '../math';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
 
@@ -190,7 +191,11 @@ export function LearnScreen({
       {!loading && !error && lesson && total > 0 && !over && (
         <>
           <Text style={styles.subTitle}>{lesson.title}</Text>
-          <Text style={styles.question}>{lesson.questions[index].text}</Text>
+          <MathText
+            text={lesson.questions[index].text}
+            style={styles.question}
+            maxWidth={Math.min(Dimensions.get('window').width, 640) - 40}
+          />
           {figure != null && <Image source={{ uri: figure }} style={styles.figureImage} />}
           <View style={styles.options}>
             {lesson.questions[index].options.map((option, optionIndex) => {
@@ -213,9 +218,15 @@ export function LearnScreen({
                   ]}
                 >
                   {option.text != null ? (
-                    <Text style={[styles.optionText, { fontSize: optionFontSize(option.text) }]}>
-                      {option.text}
-                    </Text>
+                    <MathText
+                      text={option.text}
+                      style={[
+                        styles.optionText,
+                        { fontSize: optionFontSize(stripMathForMeasure(option.text)) },
+                      ]}
+                      center
+                      maxWidth={130}
+                    />
                   ) : option.image_url != null && images[option.image_url] ? (
                     <Image
                       source={{ uri: images[option.image_url] }}
