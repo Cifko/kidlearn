@@ -121,7 +121,8 @@ async fn visible_sub(
 }
 
 /// A lesson is unlocked when it is the first one or the previous lesson's
-/// questions were all attempted.
+/// questions were all attempted. A lesson with no questions yet (still
+/// generating) never unlocks the next one: 0/0 is not complete.
 async fn is_unlocked(
     pool: &sqlx::SqlitePool,
     user_id: i64,
@@ -154,7 +155,7 @@ async fn is_unlocked(
     .bind(user_id)
     .fetch_one(pool)
     .await?;
-    Ok(answered >= total)
+    Ok(total > 0 && answered >= total)
 }
 
 fn locked() -> AppError {
@@ -394,7 +395,8 @@ async fn get_subject_progress(
     let mut unlocked = true;
     for row in rows {
         let item_unlocked = unlocked;
-        unlocked = row.answered >= row.total;
+        // Empty lessons (still generating) keep the rest of the chain locked.
+        unlocked = row.total > 0 && row.answered >= row.total;
         lessons.push(LessonProgressWithLock {
             progress: row,
             unlocked: item_unlocked,

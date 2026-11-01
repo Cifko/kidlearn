@@ -179,16 +179,26 @@ export function DetailScreen({
             {detail.lessons.map((sub) => {
               const prog = progress[sub.id];
               const locked = prog ? !prog.unlocked : false;
+              const empty = prog ? prog.total === 0 : sub.question_count === 0;
+              const learnable = !locked && !empty;
               const done =
                 prog !== undefined && prog.total > 0 && prog.answered >= prog.total;
+              // Lessons with no questions yet are still generating (or failed):
+              // show that instead of a tappable-but-empty row.
+              const emptyLabel =
+                detail.status === 'generating'
+                  ? t('generatingShort')
+                  : detail.status === 'failed'
+                    ? t('failedShort')
+                    : null;
               return (
                 <TouchableOpacity
                   key={sub.id}
-                  style={[styles.subRow, locked && styles.subRowLocked]}
-                  disabled={locked}
+                  style={[styles.subRow, !learnable && styles.subRowLocked]}
+                  disabled={!learnable}
                   onPress={() => onLearn(sub.id)}
                 >
-                  <Text style={[styles.subPosition, locked && styles.subPositionLocked]}>
+                  <Text style={[styles.subPosition, !learnable && styles.subPositionLocked]}>
                     {sub.position}
                   </Text>
                   <View style={styles.subBody}>
@@ -197,9 +207,11 @@ export function DetailScreen({
                     <Text style={styles.subCount}>
                       {locked
                         ? t('locked')
-                        : prog
-                          ? `${prog.answered}/${prog.total} ${t('questions')}${done ? ` · ${t('done')}` : ''}`
-                          : `${sub.question_count} ${t('questions')}`}
+                        : empty && emptyLabel
+                          ? emptyLabel
+                          : prog
+                            ? `${prog.answered}/${prog.total} ${t('questions')}${done ? ` · ${t('done')}` : ''}`
+                            : `${sub.question_count} ${t('questions')}`}
                     </Text>
                   </View>
                 </TouchableOpacity>

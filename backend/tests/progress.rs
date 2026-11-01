@@ -374,6 +374,33 @@ async fn second_lesson_locks_until_first_is_attempted() {
 }
 
 #[tokio::test]
+async fn empty_lesson_does_not_unlock_next() {
+    let seed = seed().await;
+    // Wipe lesson 1's questions to simulate mid-generation.
+    sqlx::query("DELETE FROM questions WHERE lesson_id = ?")
+        .bind(seed.sub1)
+        .execute(&seed.pool)
+        .await
+        .unwrap();
+
+    let (status, progress) = get_json(
+        &seed.app,
+        &seed.token,
+        format!("/subjects/{}/progress", seed.subject_id),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let subs = progress["lessons"].as_array().unwrap();
+    assert_eq!(subs[0]["total"], 0);
+    assert_eq!(subs[0]["unlocked"], true);
+    assert_eq!(subs[1]["unlocked"], false);
+
+    // Lesson 2 stays forbidden while lesson 1 has no questions.
+    let (status, _) = get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub2)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn wrong_answer_reveals_correct_key_and_records_progress() {
     let seed = seed().await;
     let (status, result) = answer(
