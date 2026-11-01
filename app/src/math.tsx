@@ -34,7 +34,12 @@ function texToSvg(source: string): RenderedMath | null {
   let result: RenderedMath | null = null;
   try {
     const node = mjDoc.convert(source, { display: false });
-    const svg = adaptor.outerHTML(node);
+    const wrapped = adaptor.outerHTML(node);
+    // convert() returns a <mjx-container> wrapper: SvgXml needs the inner
+    // <svg> as root. As a nested svg, its ex-unit width/height gets
+    // truncated to a few points on native (parseInt("4.023ex") === 4),
+    // clipping the formula to a sliver. Web only worked by CSS luck.
+    const svg = /<svg[\s\S]*<\/svg>/.exec(wrapped)?.[0] ?? wrapped;
     // MathJax renders errors as red text instead of throwing.
     if (!svg.includes('merror')) {
       const width = /width="([\d.]+)ex"/.exec(svg);
@@ -96,7 +101,9 @@ function MathSvg({ tex, fontSize, maxWidth }: { tex: string; fontSize: number; m
   const scale = maxWidth == null ? 1 : Math.min(1, maxWidth / ((rendered.widthEx * fontSize) / 2));
   const width = ((rendered.widthEx * fontSize) / 2) * scale;
   const height = ((rendered.heightEx * fontSize) / 2) * scale;
-  return <SvgXml xml={rendered.svg} width={width} height={height} />;
+  // Explicit numeric override: the svg root keeps its viewBox, while no
+  // ex-unit string ever reaches the native length parser.
+  return <SvgXml xml={rendered.svg} override={{ width, height }} />;
 }
 
 const FONT_KEYS = ['fontSize', 'color', 'fontWeight', 'fontStyle', 'lineHeight'] as const;
