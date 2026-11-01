@@ -196,7 +196,14 @@ export function LearnScreen({
                   ]}
                 >
                   {option.text != null ? (
-                    <Text style={styles.optionText}>{option.text}</Text>
+                    <Text
+                      style={styles.optionText}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.4}
+                    >
+                      {option.text}
+                    </Text>
                   ) : option.image_url != null && images[option.image_url] ? (
                     <Image
                       source={{ uri: images[option.image_url] }}
@@ -341,6 +348,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   optionText: {
+    width: '100%',
     fontSize: 24,
     fontWeight: '900',
     color: colors.ink,
