@@ -22,6 +22,7 @@ export function CreateScreen({
   const [tagsText, setTagsText] = useState('');
   const [contentLang, setContentLang] = useState<Lang>(lang);
   const [grade, setGrade] = useState<'any' | '1' | '2' | '3' | '4'>('any');
+  const [modality, setModality] = useState<'auto' | 'text_only'>('auto');
   const [count, setCount] = useState(20);
   const [phase, setPhase] = useState<Phase>('editing');
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export function CreateScreen({
         lesson_count: count,
         tags,
         grade: grade === 'any' ? null : Number(grade),
+        modality,
       });
       setPhase('generating');
       // The UI language travels with the request so lessons come back
@@ -116,6 +118,16 @@ export function CreateScreen({
           ]}
           value={grade}
           onChange={setGrade}
+        />
+      </Field>
+      <Field label={t('pictures')}>
+        <Segmented<'auto' | 'text_only'>
+          options={[
+            { value: 'auto', label: t('picturesAuto') },
+            { value: 'text_only', label: t('picturesTextOnly') },
+          ]}
+          value={modality}
+          onChange={setModality}
         />
       </Field>
       <Field label={t('lessons')}>

@@ -113,7 +113,7 @@ async fn generate_subject(
     };
 
     let subject = sqlx::query_as::<_, Subject>(
-        "SELECT id, owner_id, title, description, language, visibility, status, lesson_count, tags_json, grade, created_at
+        "SELECT id, owner_id, title, description, language, visibility, status, lesson_count, tags_json, grade, modality, created_at
          FROM subjects WHERE id = ? AND owner_id = ?",
     )
     .bind(id)
@@ -200,6 +200,7 @@ struct LessonJob {
     topic: String,
     language: String,
     grade: Option<i64>,
+    modality: String,
     position: i64,
     item: PlanItem,
     min_questions: i64,
@@ -270,6 +271,7 @@ async fn run_lessons(
             topic: topic.clone(),
             language: subject.language.clone(),
             grade: subject.grade,
+            modality: subject.modality.clone(),
             position,
             item,
             min_questions,
@@ -329,11 +331,19 @@ async fn generate_one_lesson(job: LessonJob) -> Result<(), AppError> {
                 job.min_questions,
                 job.max_questions,
                 job.grade,
+                &job.modality,
             ),
             0.7,
         )
         .await?;
-    store_lesson(&job.pool, lesson_id, &lesson, job.max_questions as usize).await?;
+    store_lesson(
+        &job.pool,
+        lesson_id,
+        &lesson,
+        job.max_questions as usize,
+        job.modality.as_str() == "text_only",
+    )
+    .await?;
     sqlx::query("UPDATE subjects SET generated_lessons = generated_lessons + 1 WHERE id = ?")
         .bind(job.subject_id)
         .execute(&job.pool)
@@ -422,23 +432,28 @@ async fn store_lesson(
     lesson_id: i64,
     lesson: &LessonResponse,
     max_questions: usize,
+    text_only: bool,
 ) -> Result<(), AppError> {
     let mut asset_ids: HashSet<&str> = HashSet::new();
-    for asset in &lesson.assets {
-        if asset.id.trim().is_empty() {
-            continue;
+    // Text-only lessons keep no picture specs: nothing can reference them,
+    // and the image prefill finds nothing to render.
+    if !text_only {
+        for asset in &lesson.assets {
+            if asset.id.trim().is_empty() {
+                continue;
+            }
+            asset_ids.insert(asset.id.as_str());
+            let spec = serde_json::to_string(asset).unwrap_or_else(|_| "{}".to_string());
+            sqlx::query(
+                "INSERT INTO assets (lesson_id, asset_key, spec_json) VALUES (?, ?, ?)
+                 ON CONFLICT (lesson_id, asset_key) DO UPDATE SET spec_json = excluded.spec_json",
+            )
+            .bind(lesson_id)
+            .bind(asset.id.as_str())
+            .bind(spec)
+            .execute(pool)
+            .await?;
         }
-        asset_ids.insert(asset.id.as_str());
-        let spec = serde_json::to_string(asset).unwrap_or_else(|_| "{}".to_string());
-        sqlx::query(
-            "INSERT INTO assets (lesson_id, asset_key, spec_json) VALUES (?, ?, ?)
-             ON CONFLICT (lesson_id, asset_key) DO UPDATE SET spec_json = excluded.spec_json",
-        )
-        .bind(lesson_id)
-        .bind(asset.id.as_str())
-        .bind(spec)
-        .execute(pool)
-        .await?;
     }
 
     let mut position = 0;
@@ -446,7 +461,7 @@ async fn store_lesson(
         if position as usize >= max_questions {
             break;
         }
-        if !valid_question(question, &asset_ids) {
+        if !valid_question(question, &asset_ids, text_only) {
             continue;
         }
         tracing::debug!(qid = %question.id, focus = %question.focus, "question focus");
@@ -480,8 +495,13 @@ async fn store_lesson(
     Ok(())
 }
 
-fn valid_question(question: &LessonQuestion, asset_ids: &HashSet<&str>) -> bool {
+fn valid_question(question: &LessonQuestion, asset_ids: &HashSet<&str>, text_only: bool) -> bool {
     if question.text.trim().is_empty() || question.focus.trim().is_empty() {
+        return false;
+    }
+    // The backstop behind the prompt's text-only rule: a text-only lesson
+    // can never serve a picture, even if the model slips one in.
+    if text_only && question.qtype.as_str() != "multiple_choice_text" {
         return false;
     }
     match question.qtype.as_str() {
@@ -614,49 +634,55 @@ mod tests {
 
     #[test]
     fn valid_questions_pass_per_type() {
-        assert!(valid_question(&image_question(), &assets()));
-        assert!(valid_question(&text_question(), &assets()));
+        assert!(valid_question(&image_question(), &assets(), false));
+        assert!(valid_question(&text_question(), &assets(), false));
+    }
+
+    #[test]
+    fn text_only_rejects_image_questions() {
+        assert!(!valid_question(&image_question(), &assets(), true));
+        assert!(valid_question(&text_question(), &assets(), true));
     }
 
     #[test]
     fn unknown_question_type_is_rejected() {
         let mut question = text_question();
         question.qtype = "multiple_choice".to_string();
-        assert!(!valid_question(&question, &assets()));
+        assert!(!valid_question(&question, &assets(), false));
     }
 
     #[test]
     fn image_questions_need_known_assets_and_focus() {
         let mut question = image_question();
         question.focus = String::new();
-        assert!(!valid_question(&question, &assets()));
+        assert!(!valid_question(&question, &assets(), false));
 
         let mut question = image_question();
         question.correct_asset_id = "missing".to_string();
-        assert!(!valid_question(&question, &assets()));
+        assert!(!valid_question(&question, &assets(), false));
 
         let mut question = image_question();
         question.options_asset_ids = vec!["a".to_string()];
         question.correct_asset_id = "b".to_string();
-        assert!(!valid_question(&question, &assets()));
+        assert!(!valid_question(&question, &assets(), false));
     }
 
     #[test]
     fn text_questions_need_distinct_options_with_correct() {
         let mut question = text_question();
         question.options_text = vec!["2".to_string()];
-        assert!(!valid_question(&question, &assets()));
+        assert!(!valid_question(&question, &assets(), false));
 
         let mut question = text_question();
         question.options_text = vec!["2".to_string(), "2".to_string()];
-        assert!(!valid_question(&question, &assets()));
+        assert!(!valid_question(&question, &assets(), false));
 
         let mut question = text_question();
         question.correct_text = "9".to_string();
-        assert!(!valid_question(&question, &assets()));
+        assert!(!valid_question(&question, &assets(), false));
 
         let mut question = text_question();
         question.options_text = vec!["2".to_string(), "  ".to_string()];
-        assert!(!valid_question(&question, &assets()));
+        assert!(!valid_question(&question, &assets(), false));
     }
 }

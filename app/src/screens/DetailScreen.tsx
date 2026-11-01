@@ -143,6 +143,7 @@ export function DetailScreen({
             {detail.owner_name} · {detail.language.toUpperCase()} ·{' '}
             {detail.visibility === 'public' ? t('public') : t('private')}
             {detail.grade != null && ` · ${t('grade')} ${detail.grade}`}
+            {detail.modality === 'text_only' && ` · ${t('picturesTextOnly')}`}
           </Text>
           {detail.description.length > 0 && (
             <Text style={styles.description}>{detail.description}</Text>

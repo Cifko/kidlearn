@@ -20,6 +20,7 @@ pub struct Subject {
     pub lesson_count: i64,
     pub tags_json: String,
     pub grade: Option<i64>,
+    pub modality: String,
     pub created_at: String,
 }
 

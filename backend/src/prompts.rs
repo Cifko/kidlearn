@@ -16,14 +16,20 @@ pub fn render_questions(
     min_questions: i64,
     max_questions: i64,
     grade: Option<i64>,
+    modality: &str,
 ) -> String {
     let grade = grade
         .map(|grade| format!("grade {grade}"))
         .unwrap_or_else(|| "unspecified".to_string());
+    let modality = match modality {
+        "text_only" => "text only",
+        _ => "auto",
+    };
     QUESTIONS
         .replace("{subject}", subject)
         .replace("{lesson}", lesson)
         .replace("{grade}", &grade)
+        .replace("{modality}", modality)
         .replace("{language}", language)
         .replace("{min_questions}", &min_questions.to_string())
         .replace("{max_questions}", &max_questions.to_string())
@@ -57,18 +63,21 @@ mod tests {
 
     #[test]
     fn questions_prompt_fills_all_placeholders() {
-        let prompt = render_questions("math", "addition", "en", 5, 10, Some(2));
+        let prompt = render_questions("math", "addition", "en", 5, 10, Some(2), "auto");
         assert!(prompt.contains("addition"));
         assert!(prompt.contains("MIN_QUESTIONS = 5"));
         assert!(prompt.contains("MAX_QUESTIONS = 10"));
         assert!(prompt.contains("GRADE = grade 2"));
+        assert!(prompt.contains("MODALITY = auto"));
         assert!(!prompt.contains("{lesson}"));
         assert!(!prompt.contains("{grade}"));
+        assert!(!prompt.contains("{modality}"));
         assert!(!prompt.contains("{min_questions}"));
         assert!(!prompt.contains("{max_questions}"));
 
-        let prompt = render_questions("math", "addition", "en", 5, 10, None);
+        let prompt = render_questions("math", "addition", "en", 5, 10, None, "text_only");
         assert!(prompt.contains("GRADE = unspecified"));
+        assert!(prompt.contains("MODALITY = text only"));
     }
 
     #[test]
@@ -76,7 +85,7 @@ mod tests {
         let plan = render_plan("math", "en", 20);
         assert!(plan.contains("tangential"));
         assert!(plan.contains("checkable skill"));
-        let questions = render_questions("math", "addition", "en", 5, 10, None);
+        let questions = render_questions("math", "addition", "en", 5, 10, None, "auto");
         assert!(questions.contains("differ ONLY in the tested attribute"));
         assert!(questions.contains("FORBIDDEN"));
         assert!(questions.contains("\"focus\""));
@@ -84,6 +93,7 @@ mod tests {
         assert!(!questions.contains("How many apples?"));
         assert!(questions.contains("multiple_choice_text"));
         assert!(questions.contains("ONE QUESTION, ONE KIND"));
+        assert!(questions.contains("impossible to test in words"));
     }
 
     #[test]

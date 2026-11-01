@@ -41,6 +41,7 @@ struct SubjectRow {
     tags_json: String,
     generated_lessons: i64,
     grade: Option<i64>,
+    modality: String,
     created_at: String,
 }
 
@@ -60,6 +61,7 @@ pub struct SubjectSummary {
     pub tags: Vec<String>,
     pub generated_lessons: i64,
     pub grade: Option<i64>,
+    pub modality: String,
     pub created_at: String,
 }
 
@@ -81,6 +83,7 @@ impl From<SubjectRow> for SubjectSummary {
             tags,
             generated_lessons: row.generated_lessons,
             grade: row.grade,
+            modality: row.modality,
             created_at: row.created_at,
         }
     }
@@ -94,6 +97,7 @@ pub struct CreateSubject {
     pub lesson_count: Option<i64>,
     pub tags: Option<Vec<String>>,
     pub grade: Option<i64>,
+    pub modality: Option<String>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -119,6 +123,7 @@ const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visib
     c.tags_json,
     c.generated_lessons,
     c.grade,
+    c.modality,
     c.created_at
     FROM subjects c JOIN users u ON u.id = c.owner_id";
 
@@ -283,10 +288,19 @@ async fn create_subject(
         }
         None => None,
     };
+    let modality = match input.modality.as_deref() {
+        None | Some("auto") => "auto",
+        Some("text_only") => "text_only",
+        Some(_) => {
+            return Err(AppError::BadRequest(
+                "modality must be 'auto' or 'text_only'".to_string(),
+            ));
+        }
+    };
 
     let (id,): (i64,) = sqlx::query_as(
-        "INSERT INTO subjects (owner_id, title, description, language, visibility, status, lesson_count, tags_json, grade)
-         VALUES (?, ?, ?, ?, ?, 'ready', ?, ?, ?) RETURNING id",
+        "INSERT INTO subjects (owner_id, title, description, language, visibility, status, lesson_count, tags_json, grade, modality)
+         VALUES (?, ?, ?, ?, ?, 'ready', ?, ?, ?, ?) RETURNING id",
     )
     .bind(auth.0.id)
     .bind(&title)
@@ -296,6 +310,7 @@ async fn create_subject(
     .bind(lesson_count)
     .bind(&tags_json)
     .bind(grade)
+    .bind(modality)
     .fetch_one(&state.db)
     .await?;
 

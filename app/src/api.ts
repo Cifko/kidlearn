@@ -22,6 +22,7 @@ export interface SubjectSummary {
   tags: string[];
   generated_lessons: number;
   grade: number | null;
+  modality: string;
   created_at: string;
 }
 
@@ -44,6 +45,7 @@ export interface CreateSubjectInput {
   lesson_count?: number;
   tags?: string[];
   grade?: number | null;
+  modality?: string;
 }
 
 export interface LessonOption {

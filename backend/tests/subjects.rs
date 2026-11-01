@@ -119,6 +119,33 @@ async fn create_stores_and_validates_grade() {
 }
 
 #[tokio::test]
+async fn create_defaults_and_validates_modality() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+
+    let (status, created) = create_subject(&app, &token, json!({ "title": "Auto" })).await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["modality"], "auto");
+
+    let (status, created) = create_subject(
+        &app,
+        &token,
+        json!({ "title": "Text", "modality": "text_only" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["modality"], "text_only");
+
+    let (status, _) = create_subject(
+        &app,
+        &token,
+        json!({ "title": "Bad", "modality": "pictures_only" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn list_shows_public_but_hides_others_private() {
     let (pool, app) = test_state().await;
     let token = login_token(&app).await;

@@ -492,6 +492,50 @@ async fn generate_records_prompts_and_answers() {
 }
 
 #[tokio::test]
+async fn text_only_generation_keeps_text_questions_only() {
+    let (url, _server) = mock_lesson_backend(LESSON_FIXTURE).await;
+    let mut config = Config::for_tests();
+    config.meta_api_key = Some("test-key".to_string());
+    config.meta_api_base = url;
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    let app = create_app(AppState::new(pool.clone(), config));
+    let token = login_token(&app).await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/subjects")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "title": "Math", "modality": "text_only" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = created["id"].as_i64().unwrap();
+
+    start_mock_generation(&app, &token, id).await;
+    let detail = wait_until_settled(&app, &token, id).await;
+    assert_eq!(detail["status"], "ready");
+    // The fixture's image question is dropped; only the text one survives.
+    for lesson in detail["lessons"].as_array().unwrap() {
+        assert_eq!(lesson["question_count"], 1);
+    }
+    let (assets,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM assets")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(assets, 0);
+}
+
+#[tokio::test]
 async fn generate_records_errors() {
     let mut config = Config::for_tests();
     config.meta_api_key = Some("test-key".to_string());

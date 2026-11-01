@@ -4,6 +4,7 @@ INPUT:
 SUBJECT = {subject}
 LESSON = {lesson}
 GRADE = {grade}
+MODALITY = {modality}
 LANGUAGE = {language}
 MIN_QUESTIONS = {min_questions}
 MAX_QUESTIONS = {max_questions}
@@ -44,6 +45,8 @@ PICKING THE MODALITY:
 17. Use TEXT options for abstract skills: arithmetic ("What is 3 + 4?" with 5/7/6), spelling, vocabulary meanings, names and terms (country capitals, animal names).
 18. Use IMAGE options for visual skills: recognizing objects, animals, shapes, colors, maps, flags, landmarks, and counting groups of things ("Which picture shows 4 apples?").
 19. A lesson may mix both kinds across its questions (geography: capitals as text, maps as images), but each single question stays one kind per rule 3.
+20. If MODALITY is "text only": every question MUST be multiple_choice_text. Images are forbidden no matter the topic - test even visual skills in words ("Which solid has 6 square faces?", "Which country is shaped like a boot?").
+21. If GRADE is unspecified, assume a general audience that reads fluently: default to TEXT for abstract topics (math beyond counting, grammar, facts, definitions). Use images only when the skill is impossible to test in words: recognizing shapes, reading maps or graphs, identifying flags, landmarks, or animals, counting groups of objects. When in doubt, text.
 
 MANDATORY STYLE FOR ALL ASSETS:
 viewBox 0 0 200 200, transparent background, thick black outline #2d3436, stroke-width 5, bright flat colors, no text, no shadow, single object centered, object fills about 80% of the canvas.
