@@ -197,6 +197,24 @@ async fn live_generate_and_render_image() {
             let is_image = option["image_url"].is_string();
             assert!(is_text ^ is_image, "option mixes kinds: {option:?}");
         }
+        // A figure the model attached must actually serve.
+        if let Some(url) = question["image_url"].as_str() {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::get(url)
+                        .header("authorization", format!("Bearer {token}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert!(response.headers()["content-type"]
+                .to_str()
+                .unwrap()
+                .starts_with("image/"));
+        }
     }
 
     let asset: Option<(i64,)> = sqlx::query_as("SELECT id FROM assets LIMIT 1")

@@ -60,6 +60,7 @@ export interface LessonQuestion {
   qid: string;
   text: string;
   qtype: string;
+  image_url: string | null;
   options: LessonOption[];
 }
 

@@ -42,6 +42,7 @@ struct LessonQuestion {
     qid: String,
     text: String,
     qtype: String,
+    image_url: Option<String>,
     options: Vec<LessonOption>,
 }
 
@@ -181,7 +182,7 @@ async fn get_lesson(
 
     let questions = sqlx::query_as::<_, Question>(
         "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset,
-            options_text_json, correct_text
+            options_text_json, correct_text, figure_asset
          FROM questions WHERE lesson_id = ? ORDER BY position",
     )
     .bind(sub.id)
@@ -217,12 +218,20 @@ async fn get_lesson(
         if options.is_empty() {
             continue;
         }
+        let image_url = if question.figure_asset.is_empty() {
+            None
+        } else {
+            asset_ids
+                .get(question.figure_asset.as_str())
+                .map(|asset_id| format!("/assets/{asset_id}/image"))
+        };
         lesson_questions.push(LessonQuestion {
             id: question.id,
             position: question.position,
             qid: question.qid,
             text: question.text,
             qtype: question.qtype,
+            image_url,
             options,
         });
     }
@@ -250,7 +259,7 @@ async fn answer_question(
     }
     let question = sqlx::query_as::<_, Question>(
         "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset,
-            options_text_json, correct_text
+            options_text_json, correct_text, figure_asset
          FROM questions WHERE id = ? AND lesson_id = ?",
     )
     .bind(input.question_id)

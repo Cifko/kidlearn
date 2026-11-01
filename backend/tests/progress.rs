@@ -245,6 +245,38 @@ async fn lesson_returns_text_options_for_text_questions() {
 }
 
 #[tokio::test]
+async fn lesson_serves_figure_image_when_present() {
+    let seed = seed().await;
+    sqlx::query(
+        "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset,
+             options_text_json, correct_text, figure_asset)
+         VALUES (?, 4, 'q4', 'Which region in the picture is red?', 'multiple_choice_text', '[]', '',
+             '[\"left\",\"right\",\"both\"]', 'both', 'red_ball')",
+    )
+    .bind(seed.sub1)
+    .execute(&seed.pool)
+    .await
+    .unwrap();
+
+    let (status, lesson) =
+        get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub1)).await;
+    assert_eq!(status, StatusCode::OK);
+    let questions = lesson["questions"].as_array().unwrap();
+    assert_eq!(questions.len(), 4);
+    let figure_question = questions.iter().find(|q| q["qid"] == "q4").unwrap();
+    assert!(figure_question["image_url"]
+        .as_str()
+        .unwrap()
+        .starts_with("/assets/"));
+    assert!(figure_question["image_url"]
+        .as_str()
+        .unwrap()
+        .ends_with("/image"));
+    // Questions without a figure carry no image.
+    assert!(questions[0]["image_url"].is_null());
+}
+
+#[tokio::test]
 async fn text_answers_checked_against_correct_text() {
     let seed = seed().await;
     let (text_id,): (i64,) = sqlx::query_as(

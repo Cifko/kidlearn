@@ -51,9 +51,10 @@ export function LearnScreen({
       const data = await api.lesson(token, lessonId);
       const urls = [
         ...new Set(
-          data.questions.flatMap((q) =>
-            q.options.flatMap((o) => (o.image_url ? [o.image_url] : [])),
-          ),
+          data.questions.flatMap((q) => [
+            ...(q.image_url ? [q.image_url] : []),
+            ...q.options.flatMap((o) => (o.image_url ? [o.image_url] : [])),
+          ]),
         ),
       ];
       const entries = await Promise.all(
@@ -137,6 +138,8 @@ export function LearnScreen({
   const current = lesson?.questions[index];
   // The server guarantees one kind per question; the first option tells which.
   const isTextQuestion = current != null && current.options[0]?.text != null;
+  const figureUrl = current?.image_url ?? null;
+  const figure = figureUrl != null ? images[figureUrl] : undefined;
 
   return (
     <Screen>
@@ -188,6 +191,7 @@ export function LearnScreen({
         <>
           <Text style={styles.subTitle}>{lesson.title}</Text>
           <Text style={styles.question}>{lesson.questions[index].text}</Text>
+          {figure != null && <Image source={{ uri: figure }} style={styles.figureImage} />}
           <View style={styles.options}>
             {lesson.questions[index].options.map((option, optionIndex) => {
               const value = option.text ?? option.asset_key ?? '';
@@ -354,6 +358,16 @@ const styles = StyleSheet.create({
     height: 110,
     borderRadius: 8,
     backgroundColor: colors.card,
+  },
+  figureImage: {
+    width: 220,
+    height: 220,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   optionText: {
     width: '100%',

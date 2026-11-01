@@ -45,6 +45,7 @@ pub struct Question {
     pub correct_asset: String,
     pub options_text_json: String,
     pub correct_text: String,
+    pub figure_asset: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

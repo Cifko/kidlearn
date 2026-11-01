@@ -76,6 +76,8 @@ struct LessonQuestion {
     options_text: Vec<String>,
     #[serde(default)]
     correct_text: String,
+    #[serde(default)]
+    figure_asset_id: String,
 }
 
 #[derive(Debug, Deserialize, serde::Serialize)]
@@ -473,8 +475,8 @@ async fn store_lesson(
             serde_json::to_string(&text_options).unwrap_or_else(|_| "[]".to_string());
         sqlx::query(
             "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset,
-                 options_text_json, correct_text)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 options_text_json, correct_text, figure_asset)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(lesson_id)
         .bind(position)
@@ -489,6 +491,7 @@ async fn store_lesson(
         .bind(question.correct_asset_id.as_str())
         .bind(options_text)
         .bind(text_correct)
+        .bind(question.figure_asset_id.trim())
         .execute(pool)
         .await?;
     }
@@ -501,7 +504,16 @@ fn valid_question(question: &LessonQuestion, asset_ids: &HashSet<&str>, text_onl
     }
     // The backstop behind the prompt's text-only rule: a text-only lesson
     // can never serve a picture, even if the model slips one in.
-    if text_only && question.qtype.as_str() != "multiple_choice_text" {
+    if text_only
+        && (question.qtype.as_str() != "multiple_choice_text"
+            || !question.figure_asset_id.trim().is_empty())
+    {
+        return false;
+    }
+    // A figure must point at a defined asset; empty means no figure.
+    if !question.figure_asset_id.trim().is_empty()
+        && !asset_ids.contains(question.figure_asset_id.trim())
+    {
         return false;
     }
     match question.qtype.as_str() {
@@ -616,6 +628,7 @@ mod tests {
             correct_asset_id: "a".to_string(),
             options_text: Vec::new(),
             correct_text: String::new(),
+            figure_asset_id: String::new(),
         }
     }
 
@@ -629,6 +642,7 @@ mod tests {
             correct_asset_id: String::new(),
             options_text: vec!["1".to_string(), "2".to_string(), "3".to_string()],
             correct_text: "2".to_string(),
+            figure_asset_id: String::new(),
         }
     }
 
@@ -642,6 +656,23 @@ mod tests {
     fn text_only_rejects_image_questions() {
         assert!(!valid_question(&image_question(), &assets(), true));
         assert!(valid_question(&text_question(), &assets(), true));
+    }
+
+    #[test]
+    fn figure_must_reference_a_known_asset() {
+        let mut question = text_question();
+        question.figure_asset_id = "a".to_string();
+        assert!(valid_question(&question, &assets(), false));
+
+        question.figure_asset_id = "missing".to_string();
+        assert!(!valid_question(&question, &assets(), false));
+    }
+
+    #[test]
+    fn text_only_rejects_figures() {
+        let mut question = text_question();
+        question.figure_asset_id = "a".to_string();
+        assert!(!valid_question(&question, &assets(), true));
     }
 
     #[test]

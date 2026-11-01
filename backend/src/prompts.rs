@@ -94,6 +94,7 @@ mod tests {
         assert!(questions.contains("multiple_choice_text"));
         assert!(questions.contains("ONE QUESTION, ONE KIND"));
         assert!(questions.contains("impossible to test in words"));
+        assert!(questions.contains("figure_asset_id"));
     }
 
     #[test]

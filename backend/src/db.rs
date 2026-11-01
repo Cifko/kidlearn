@@ -45,7 +45,8 @@ const SCHEMA: &[&str] = &[
         options_json TEXT NOT NULL,
         correct_asset TEXT NOT NULL,
         options_text_json TEXT NOT NULL DEFAULT '[]',
-        correct_text TEXT NOT NULL DEFAULT ''
+        correct_text TEXT NOT NULL DEFAULT '',
+        figure_asset TEXT NOT NULL DEFAULT ''
     )",
     "CREATE TABLE IF NOT EXISTS assets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,6 +111,7 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE questions ADD COLUMN correct_text TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE subjects ADD COLUMN grade INTEGER",
     "ALTER TABLE subjects ADD COLUMN modality TEXT NOT NULL DEFAULT 'auto'",
+    "ALTER TABLE questions ADD COLUMN figure_asset TEXT NOT NULL DEFAULT ''",
 ];
 
 pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {

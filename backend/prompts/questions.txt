@@ -24,7 +24,7 @@ STRICT RULES:
 7. The asset "description" must be a precise visual description, not just a name.
    BAD: "cylinder"
    GOOD: "Blue cylinder viewed from slightly above, light blue top ellipse, centered, isolated"
-8. Do not invent new visuals during question creation. First define the assets, then build image questions only from those assets. Text questions need no assets.
+8. Do not invent new visuals during question creation. First define the assets, then build image questions only from those assets. Text questions need no assets except an optional figure (rule 22).
 9. Keep all questions simple and short. For grade 1-2 (or GRADE unspecified with a young topic) the child may barely read: prefer pictures, and use text options only for single familiar words or numbers.
 
 LESSON ALIGNMENT (most important - read twice):
@@ -45,8 +45,10 @@ PICKING THE MODALITY:
 17. Use TEXT options for abstract skills: arithmetic ("What is 3 + 4?" with 5/7/6), spelling, vocabulary meanings, names and terms (country capitals, animal names).
 18. Use IMAGE options for visual skills: recognizing objects, animals, shapes, colors, maps, flags, landmarks, and counting groups of things ("Which picture shows 4 apples?").
 19. A lesson may mix both kinds across its questions (geography: capitals as text, maps as images), but each single question stays one kind per rule 3.
-20. If MODALITY is "text only": every question MUST be multiple_choice_text. Images are forbidden no matter the topic - test even visual skills in words ("Which solid has 6 square faces?", "Which country is shaped like a boot?").
+20. If MODALITY is "text only": every question MUST be multiple_choice_text with figure_asset_id empty. Images are forbidden no matter the topic - test even visual skills in words ("Which solid has 6 square faces?", "Which country is shaped like a boot?").
 21. If GRADE is unspecified, assume a general audience that reads fluently: default to TEXT for abstract topics (math beyond counting, grammar, facts, definitions). Use images only when the skill is impossible to test in words: recognizing shapes, reading maps or graphs, identifying flags, landmarks, or animals, counting groups of objects. When in doubt, text.
+22. If a question refers to a specific figure the child must look at - a diagram, map, scene, or arrangement - set figure_asset_id to an asset showing exactly that figure, describe it in assets, and refer to it in the text ("in the picture", "the shaded region"). Example: a Venn diagram figure with text options for "Which region is A and B?". Most questions need no figure: leave figure_asset_id empty rather than decorating.
+23. A figure never replaces the options: figure, text, and options together must still determine exactly one answer. Never ask about a figure you did not attach.
 
 MANDATORY STYLE FOR ALL ASSETS:
 viewBox 0 0 200 200, transparent background, thick black outline #2d3436, stroke-width 5, bright flat colors, no text, no shadow, single object centered, object fills about 80% of the canvas.
@@ -61,6 +63,7 @@ OUTPUT SCHEMA:
       "text": "string in {language}",
       "type": "multiple_choice_image",
       "focus": "short skill phrase in English",
+      "figure_asset_id": "",
       "options_asset_ids": ["asset_id_1", "asset_id_2", "asset_id_3"],
       "correct_asset_id": "asset_id_1",
       "options_text": [],
@@ -71,6 +74,7 @@ OUTPUT SCHEMA:
       "text": "string in {language}",
       "type": "multiple_choice_text",
       "focus": "short skill phrase in English",
+      "figure_asset_id": "",
       "options_asset_ids": [],
       "correct_asset_id": "",
       "options_text": ["5", "7", "6"],
