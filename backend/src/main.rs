@@ -15,7 +15,9 @@ async fn main() {
         .expect("database init failed");
     tracing::info!("database ready");
     let app = create_app(AppState::new(db, config.clone()));
-    let addr = format!("127.0.0.1:{}", config.port);
+    // All interfaces: a physical phone reaches the backend via the LAN IP.
+    // Localhost keeps working as before.
+    let addr = format!("0.0.0.0:{}", config.port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .expect("bind failed");
