@@ -92,15 +92,33 @@ export function stripMathForMeasure(input: string): string {
     .join('');
 }
 
-function MathSvg({ tex, fontSize, maxWidth }: { tex: string; fontSize: number; maxWidth?: number }) {
+function MathSvg({
+  tex,
+  fontSize,
+  maxWidth,
+  maxHeight,
+}: {
+  tex: string;
+  fontSize: number;
+  maxWidth?: number;
+  maxHeight?: number;
+}) {
   const rendered = useMemo(() => texToSvg(tex), [tex]);
   if (rendered === null) {
     return <Text style={{ fontSize }}>{tex}</Text>;
   }
   // MathJax ex units: 1ex is half the font size.
-  const scale = maxWidth == null ? 1 : Math.min(1, maxWidth / ((rendered.widthEx * fontSize) / 2));
-  const width = ((rendered.widthEx * fontSize) / 2) * scale;
-  const height = ((rendered.heightEx * fontSize) / 2) * scale;
+  const naturalWidth = (rendered.widthEx * fontSize) / 2;
+  const naturalHeight = (rendered.heightEx * fontSize) / 2;
+  let scale = 1;
+  if (maxWidth != null && naturalWidth > 0) {
+    scale = Math.min(scale, maxWidth / naturalWidth);
+  }
+  if (maxHeight != null && naturalHeight > 0) {
+    scale = Math.min(scale, maxHeight / naturalHeight);
+  }
+  const width = naturalWidth * scale;
+  const height = naturalHeight * scale;
   // Explicit numeric override: the svg root keeps its viewBox, while no
   // ex-unit string ever reaches the native length parser.
   return <SvgXml xml={rendered.svg} override={{ width, height }} />;
@@ -112,11 +130,13 @@ export function MathText({
   text,
   style,
   maxWidth,
+  maxHeight,
   center = false,
 }: {
   text: string;
   style?: StyleProp<TextStyle>;
   maxWidth?: number;
+  maxHeight?: number;
   center?: boolean;
 }) {
   const spans = useMemo(() => splitMathSpans(text), [text]);
@@ -146,7 +166,13 @@ export function MathText({
             {span.text}
           </Text>
         ) : (
-          <MathSvg key={index} tex={span.tex} fontSize={fontSize} maxWidth={maxWidth} />
+          <MathSvg
+            key={index}
+            tex={span.tex}
+            fontSize={fontSize}
+            maxWidth={maxWidth}
+            maxHeight={maxHeight}
+          />
         ),
       )}
     </View>
