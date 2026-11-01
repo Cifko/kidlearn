@@ -3,6 +3,7 @@ import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { api, ApiError, AnswerResult, Lesson } from '../api';
 import { useLang } from '../i18n';
 import { MathText, stripMathForMeasure } from '../math';
+import { PlotView } from '../plot';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
 
@@ -196,6 +197,12 @@ export function LearnScreen({
             style={styles.question}
             maxWidth={Math.min(Dimensions.get('window').width, 640) - 40}
           />
+          {current?.plot != null && (
+            <PlotView
+              plot={current.plot}
+              width={Math.min(Dimensions.get('window').width, 640) - 40}
+            />
+          )}
           {figure != null && <Image source={{ uri: figure }} style={styles.figureImage} />}
           <View style={styles.options}>
             {lesson.questions[index].options.map((option, optionIndex) => {

@@ -306,6 +306,7 @@ const LESSON_FIXTURE: &str = r##"{
         {"id": "q1", "text": "Pick a in the picture", "type": "multiple_choice_image", "focus": "name object a",
          "figure_asset_id": "a", "options_asset_ids": ["a", "b"], "correct_asset_id": "a"},
         {"id": "q2", "text": "Pick two", "type": "multiple_choice_text", "focus": "read number 2",
+         "plot": {"functions": [{"expr": "x", "label": ""}], "x_min": 0, "x_max": 3, "y_min": 0, "y_max": 3, "points": []},
          "options_text": ["1", "2", "3"], "correct_text": "2"}
     ],
     "assets": [

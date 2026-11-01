@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{auth::AuthUser, error::AppError, models::Question, AppState};
+use crate::{auth::AuthUser, error::AppError, models::PlotSpec, models::Question, AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -43,6 +43,7 @@ struct LessonQuestion {
     text: String,
     qtype: String,
     image_url: Option<String>,
+    plot: Option<PlotSpec>,
     options: Vec<LessonOption>,
 }
 
@@ -182,7 +183,7 @@ async fn get_lesson(
 
     let questions = sqlx::query_as::<_, Question>(
         "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset,
-            options_text_json, correct_text, figure_asset
+            options_text_json, correct_text, figure_asset, plot_json
          FROM questions WHERE lesson_id = ? ORDER BY position",
     )
     .bind(sub.id)
@@ -225,6 +226,11 @@ async fn get_lesson(
                 .get(question.figure_asset.as_str())
                 .map(|asset_id| format!("/assets/{asset_id}/image"))
         };
+        let plot = if question.plot_json.is_empty() {
+            None
+        } else {
+            serde_json::from_str(&question.plot_json).unwrap_or(None)
+        };
         lesson_questions.push(LessonQuestion {
             id: question.id,
             position: question.position,
@@ -232,6 +238,7 @@ async fn get_lesson(
             text: question.text,
             qtype: question.qtype,
             image_url,
+            plot,
             options,
         });
     }
@@ -259,7 +266,7 @@ async fn answer_question(
     }
     let question = sqlx::query_as::<_, Question>(
         "SELECT id, lesson_id, position, qid, text, qtype, options_json, correct_asset,
-            options_text_json, correct_text, figure_asset
+            options_text_json, correct_text, figure_asset, plot_json
          FROM questions WHERE id = ? AND lesson_id = ?",
     )
     .bind(input.question_id)

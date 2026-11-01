@@ -277,6 +277,36 @@ async fn lesson_serves_figure_image_when_present() {
 }
 
 #[tokio::test]
+async fn lesson_serves_plot_when_present() {
+    let seed = seed().await;
+    let plot = serde_json::json!({
+        "functions": [{"expr": "x^2", "label": "f(x) = x^2"}],
+        "x_min": -5, "x_max": 5, "y_min": -2, "y_max": 10,
+        "points": [{"x": 2, "y": 4, "label": ""}],
+    });
+    sqlx::query(
+        "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset,
+             options_text_json, correct_text, figure_asset, plot_json)
+         VALUES (?, 4, 'q4', 'What is f(2)?', 'multiple_choice_text', '[]', '', '[\"2\",\"4\",\"8\"]', '4', '', ?)",
+    )
+    .bind(seed.sub1)
+    .bind(plot.to_string())
+    .execute(&seed.pool)
+    .await
+    .unwrap();
+
+    let (status, lesson) =
+        get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub1)).await;
+    assert_eq!(status, StatusCode::OK);
+    let questions = lesson["questions"].as_array().unwrap();
+    let plotted = questions.iter().find(|q| q["qid"] == "q4").unwrap();
+    assert_eq!(plotted["plot"]["functions"][0]["expr"], "x^2");
+    assert_eq!(plotted["plot"]["x_max"], 5.0);
+    assert_eq!(plotted["plot"]["points"][0]["y"], 4.0);
+    assert!(questions[0]["plot"].is_null());
+}
+
+#[tokio::test]
 async fn text_answers_checked_against_correct_text() {
     let seed = seed().await;
     let (text_id,): (i64,) = sqlx::query_as(

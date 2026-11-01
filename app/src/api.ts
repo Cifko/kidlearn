@@ -54,6 +54,26 @@ export interface LessonOption {
   text: string | null;
 }
 
+export interface PlotFunction {
+  expr: string;
+  label: string;
+}
+
+export interface PlotPoint {
+  x: number;
+  y: number;
+  label: string;
+}
+
+export interface PlotSpec {
+  functions: PlotFunction[];
+  x_min: number;
+  x_max: number;
+  y_min: number;
+  y_max: number;
+  points: PlotPoint[];
+}
+
 export interface LessonQuestion {
   id: number;
   position: number;
@@ -61,6 +81,7 @@ export interface LessonQuestion {
   text: string;
   qtype: string;
   image_url: string | null;
+  plot: PlotSpec | null;
   options: LessonOption[];
 }
 

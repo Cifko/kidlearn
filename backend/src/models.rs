@@ -33,6 +33,42 @@ pub struct Lesson {
     pub summary: String,
 }
 
+/// A deterministic function plot, drawn by the app with no AI call.
+/// Expressions use explicit operators (`2*x`, never `2x`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlotFunction {
+    #[serde(default)]
+    pub expr: String,
+    #[serde(default)]
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlotPoint {
+    #[serde(default)]
+    pub x: f64,
+    #[serde(default)]
+    pub y: f64,
+    #[serde(default)]
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlotSpec {
+    #[serde(default)]
+    pub functions: Vec<PlotFunction>,
+    #[serde(default)]
+    pub x_min: f64,
+    #[serde(default)]
+    pub x_max: f64,
+    #[serde(default)]
+    pub y_min: f64,
+    #[serde(default)]
+    pub y_max: f64,
+    #[serde(default)]
+    pub points: Vec<PlotPoint>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Question {
     pub id: i64,
@@ -46,6 +82,7 @@ pub struct Question {
     pub options_text_json: String,
     pub correct_text: String,
     pub figure_asset: String,
+    pub plot_json: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

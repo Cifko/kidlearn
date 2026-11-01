@@ -17,7 +17,7 @@ use crate::{
     auth::AuthUser,
     error::AppError,
     meta::{CallContext, MetaClient},
-    models::Subject,
+    models::{PlotSpec, Subject},
     prompts,
     subjects::{subject_detail, SubjectDetail},
     AppState,
@@ -78,6 +78,8 @@ struct LessonQuestion {
     correct_text: String,
     #[serde(default)]
     figure_asset_id: String,
+    #[serde(default)]
+    plot: Option<PlotSpec>,
 }
 
 #[derive(Debug, Deserialize, serde::Serialize)]
@@ -473,10 +475,15 @@ async fn store_lesson(
         let (text_options, text_correct) = cleaned_text_options(question);
         let options_text =
             serde_json::to_string(&text_options).unwrap_or_else(|_| "[]".to_string());
+        let plot_json = question
+            .plot
+            .as_ref()
+            .map(|plot| serde_json::to_string(plot).unwrap_or_default())
+            .unwrap_or_default();
         sqlx::query(
             "INSERT INTO questions (lesson_id, position, qid, text, qtype, options_json, correct_asset,
-                 options_text_json, correct_text, figure_asset)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 options_text_json, correct_text, figure_asset, plot_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(lesson_id)
         .bind(position)
@@ -492,6 +499,7 @@ async fn store_lesson(
         .bind(options_text)
         .bind(text_correct)
         .bind(question.figure_asset_id.trim())
+        .bind(plot_json)
         .execute(pool)
         .await?;
     }
@@ -515,6 +523,13 @@ fn valid_question(question: &LessonQuestion, asset_ids: &HashSet<&str>, text_onl
         && !asset_ids.contains(question.figure_asset_id.trim())
     {
         return false;
+    }
+    // Plots are allowed in every modality: they are deterministic diagrams,
+    // not AI pictures. Only the shape is checked; the app parses expressions.
+    if let Some(plot) = &question.plot {
+        if !valid_plot(plot) {
+            return false;
+        }
     }
     match question.qtype.as_str() {
         "multiple_choice_image" => {
@@ -545,6 +560,22 @@ fn cleaned_text_options(question: &LessonQuestion) -> (Vec<String>, String) {
         .filter(|option| !option.is_empty())
         .collect();
     (options, question.correct_text.trim().to_string())
+}
+
+fn valid_plot(plot: &PlotSpec) -> bool {
+    (1..=4).contains(&plot.functions.len())
+        && plot
+            .functions
+            .iter()
+            .all(|f| !f.expr.trim().is_empty() && f.expr.len() <= 200 && f.label.len() <= 80)
+        && plot.points.len() <= 8
+        && plot.points.iter().all(|p| p.label.len() <= 40)
+        && plot.x_min.is_finite()
+        && plot.x_max.is_finite()
+        && plot.y_min.is_finite()
+        && plot.y_max.is_finite()
+        && plot.x_min < plot.x_max
+        && plot.y_min < plot.y_max
 }
 
 /// Text options must offer a real choice: at least two distinct answers,
@@ -629,6 +660,7 @@ mod tests {
             options_text: Vec::new(),
             correct_text: String::new(),
             figure_asset_id: String::new(),
+            plot: None,
         }
     }
 
@@ -643,6 +675,25 @@ mod tests {
             options_text: vec!["1".to_string(), "2".to_string(), "3".to_string()],
             correct_text: "2".to_string(),
             figure_asset_id: String::new(),
+            plot: None,
+        }
+    }
+
+    fn plot() -> PlotSpec {
+        PlotSpec {
+            functions: vec![crate::models::PlotFunction {
+                expr: "x^2".to_string(),
+                label: "f(x) = x^2".to_string(),
+            }],
+            x_min: -5.0,
+            x_max: 5.0,
+            y_min: -2.0,
+            y_max: 10.0,
+            points: vec![crate::models::PlotPoint {
+                x: 2.0,
+                y: 4.0,
+                label: String::new(),
+            }],
         }
     }
 
@@ -673,6 +724,35 @@ mod tests {
         let mut question = text_question();
         question.figure_asset_id = "a".to_string();
         assert!(!valid_question(&question, &assets(), true));
+    }
+
+    #[test]
+    fn valid_plot_passes_and_bad_plot_fails() {
+        let mut question = text_question();
+        question.plot = Some(plot());
+        assert!(valid_question(&question, &assets(), false));
+
+        // Plots are deterministic diagrams, allowed even in text-only mode.
+        assert!(valid_question(&question, &assets(), true));
+
+        let mut bad = plot();
+        bad.functions.clear();
+        let mut question = text_question();
+        question.plot = Some(bad);
+        assert!(!valid_question(&question, &assets(), false));
+
+        let mut bad = plot();
+        bad.x_min = 5.0;
+        bad.x_max = -5.0;
+        let mut question = text_question();
+        question.plot = Some(bad);
+        assert!(!valid_question(&question, &assets(), false));
+
+        let mut bad = plot();
+        bad.functions[0].expr = String::new();
+        let mut question = text_question();
+        question.plot = Some(bad);
+        assert!(!valid_question(&question, &assets(), false));
     }
 
     #[test]

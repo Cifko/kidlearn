@@ -10,6 +10,7 @@
     "expo-crypto": "~58.0.7",
     "expo-status-bar": "~58.0.4",
     "expo-web-browser": "~58.0.7",
+    "expr-eval": "^2.0.2",
     "mathjax-full": "^3.2.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",

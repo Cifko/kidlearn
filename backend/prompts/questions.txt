@@ -33,6 +33,7 @@ HARD RULES:
 10. If MODALITY is "text only": every question MUST be multiple_choice_text with figure_asset_id empty. No images, no exceptions.
 11. If a question refers to a specific figure the student must look at (diagram, map, graph, scene), set figure_asset_id to an asset showing exactly that figure and refer to it ("in the picture"). Most questions need no figure: leave it empty rather than decorating. Never ask about a figure you did not attach.
 12. Write all mathematics in LaTeX inside \(...\), never ASCII or Unicode approximations: GOOD "\(\\lim_{x \\to 2} (3x + 1)\)", "\(\\frac{3}{2}\)", "\(\\mathrm{H_2O}\)". BAD: "lim_{x->2}", "limₓ→₂", "3/2" for math, bare "\\frac" outside \(...\). Bare numbers and plain words stay as normal text. Use standard commands only (frac, sqrt, lim, to, infty, le, ge, ne, pm, times, div, mathrm); nothing exotic.
+13. If a question is about the shape or behavior of a function (limits, zeros, intersections, slope, growth), attach a "plot" instead of describing the graph in words: 1-4 functions of x with explicit operators ("2*x", never "2x"; supported: + - * / ^ ( ) sin cos tan sqrt abs log pi e), ranges that show the interesting behavior, and optional marked points. Omit "plot" (null) for anything else.
 
 OUTPUT SCHEMA:
 {
@@ -56,10 +57,27 @@ OUTPUT SCHEMA:
       "type": "multiple_choice_text",
       "focus": "short skill phrase in English",
       "figure_asset_id": "",
+      "plot": null,
       "options_asset_ids": [],
       "correct_asset_id": "",
       "options_text": ["5", "7", "6"],
       "correct_text": "7"
+    },
+    {
+      "id": "q3",
+      "text": "string in {language}, may refer to 'the graph'",
+      "type": "multiple_choice_text",
+      "focus": "short skill phrase in English",
+      "figure_asset_id": "",
+      "plot": {
+        "functions": [{"expr": "x^2", "label": "f(x) = x^2"}],
+        "x_min": -5, "x_max": 5, "y_min": -2, "y_max": 10,
+        "points": [{"x": 2, "y": 4, "label": ""}]
+      },
+      "options_asset_ids": [],
+      "correct_asset_id": "",
+      "options_text": ["2", "4", "8"],
+      "correct_text": "4"
     }
   ],
   "assets": [
