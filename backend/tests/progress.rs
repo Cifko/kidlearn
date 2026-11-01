@@ -374,6 +374,24 @@ async fn second_lesson_locks_until_first_is_attempted() {
 }
 
 #[tokio::test]
+async fn lesson_reports_pending_images() {
+    let seed = seed().await;
+    let (status, lesson) =
+        get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub1)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(lesson["images_pending"], 3);
+
+    sqlx::query("UPDATE assets SET image_blob = ?, image_mime = 'image/png' WHERE lesson_id = ?")
+        .bind(vec![0u8, 1u8])
+        .bind(seed.sub1)
+        .execute(&seed.pool)
+        .await
+        .unwrap();
+    let (_, lesson) = get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub1)).await;
+    assert_eq!(lesson["images_pending"], 0);
+}
+
+#[tokio::test]
 async fn empty_lesson_does_not_unlock_next() {
     let seed = seed().await;
     // Wipe lesson 1's questions to simulate mid-generation.

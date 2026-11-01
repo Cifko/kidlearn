@@ -23,6 +23,10 @@ export function LearnScreen({
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [images, setImages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [fetchingImages, setFetchingImages] = useState(false);
+  const [imagesPending, setImagesPending] = useState(0);
+  const [imagesTotal, setImagesTotal] = useState(0);
+  const [imagesLoaded, setImagesLoaded] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
@@ -36,6 +40,10 @@ export function LearnScreen({
 
   const load = useCallback(async () => {
     setLoading(true);
+    setFetchingImages(false);
+    setImagesPending(0);
+    setImagesTotal(0);
+    setImagesLoaded(0);
     setError(null);
     try {
       const data = await api.lesson(token, lessonId);
@@ -47,11 +55,20 @@ export function LearnScreen({
           ]),
         ),
       ];
-      const entries = await Promise.all(
-        urls.map(async (url) => [url, await api.assetImage(token, url)] as const),
+      setImagesPending(data.images_pending);
+      setImagesTotal(urls.length);
+      if (urls.length > 0) {
+        setFetchingImages(true);
+      }
+      const uris = await Promise.all(
+        urls.map(async (url) => {
+          const uri = await api.assetImage(token, url);
+          setImagesLoaded((n) => n + 1);
+          return uri;
+        }),
       );
       setLesson(data);
-      setImages(Object.fromEntries(entries));
+      setImages(Object.fromEntries(urls.map((url, index) => [url, uris[index]])));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load');
     } finally {
@@ -143,7 +160,13 @@ export function LearnScreen({
         <Text style={styles.hearts}>{'♥'.repeat(Math.max(0, hearts))}</Text>
       </View>
 
-      {loading && <Text style={styles.muted}>{t('loading')}</Text>}
+      {loading && (
+        <Text style={styles.muted}>
+          {fetchingImages && imagesPending > 0
+            ? `${t('generatingPictures')} (${imagesLoaded}/${imagesTotal})`
+            : t('loading')}
+        </Text>
+      )}
       {error && <ErrorBox message={error} onRetry={load} />}
 
       {!loading && !error && lesson && total === 0 && (

@@ -92,6 +92,7 @@ export interface Lesson {
   title: string;
   summary: string;
   questions: LessonQuestion[];
+  images_pending: number;
 }
 
 export interface AnswerResult {

@@ -55,6 +55,9 @@ struct Lesson {
     title: String,
     summary: String,
     questions: Vec<LessonQuestion>,
+    /// Assets whose images are not rendered yet: the client shows a
+    /// "generating pictures" state instead of a bare loading spinner.
+    images_pending: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -244,6 +247,12 @@ async fn get_lesson(
         });
     }
 
+    let (images_pending,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM assets WHERE lesson_id = ? AND image_blob IS NULL")
+            .bind(sub.id)
+            .fetch_one(&state.db)
+            .await?;
+
     Ok(Json(Lesson {
         id: sub.id,
         subject_id: sub.subject_id,
@@ -251,6 +260,7 @@ async fn get_lesson(
         title: sub.title,
         summary: sub.summary,
         questions: lesson_questions,
+        images_pending,
     }))
 }
 
