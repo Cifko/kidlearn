@@ -32,6 +32,9 @@ HARD RULES:
 9. Every referenced asset id must be defined in "assets" with a unique lowercase id and a precise visual description. Define assets first, then build questions only from them. Text questions need assets only for an optional figure.
 10. If MODALITY is "text only": every question MUST be multiple_choice_text with figure_asset_id empty. No images, no exceptions.
 11. If a question refers to a specific figure the student must look at (diagram, map, graph, scene), set figure_asset_id to an asset showing exactly that figure and refer to it ("in the picture"). Most questions need no figure: leave it empty rather than decorating. Never ask about a figure you did not attach.
+12. Write mathematics with Unicode notation, never ASCII approximations or LaTeX: arrows and operators (→ ≤ ≥ ≠ ± × ÷ ∞), sub/superscripts (x², H₂O, limₓ→₂, (RT)⁻²), ∫ ∑ √, and Greek letters (θ π Δ). Keep fractions linear (3/2) unless a single vulgar fraction fits (½).
+    GOOD: "limₓ→₂ (3x + 1)", "Kp = Kc(RT)⁻²".
+    BAD: "lim_{x->2} (3x + 1)", "Kp = Kc(RT)^-2", "\\frac{3}{2}".
 
 OUTPUT SCHEMA:
 {

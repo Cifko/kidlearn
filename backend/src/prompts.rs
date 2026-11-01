@@ -108,6 +108,7 @@ mod tests {
         assert!(questions.contains("ONE QUESTION, ONE KIND"));
         assert!(questions.contains("impossible to test in words"));
         assert!(questions.contains("figure_asset_id"));
+        assert!(questions.contains("Unicode notation"));
     }
 
     #[test]
