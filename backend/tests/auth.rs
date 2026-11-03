@@ -1,6 +1,7 @@
 use axum::{
     body::Body,
     http::{Request, StatusCode},
+    response::IntoResponse,
 };
 use kidlearn_backend::{config::Config, create_app, db, AppState};
 use serde_json::json;
@@ -254,4 +255,142 @@ async fn dev_login_supports_second_user() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+async fn mock_graph() -> (String, tokio::task::JoinHandle<()>) {
+    let app = axum::Router::new()
+        .route(
+            "/oauth/access_token",
+            axum::routing::get(
+                |axum::extract::Query(params): axum::extract::Query<
+                    std::collections::HashMap<String, String>,
+                >| async move {
+                    match params.get("code").map(String::as_str) {
+                        Some("good") => axum::Json(json!({
+                            "access_token": "tok",
+                            "token_type": "bearer",
+                        }))
+                        .into_response(),
+                        Some("noemail") => axum::Json(json!({
+                            "access_token": "tok-noemail",
+                            "token_type": "bearer",
+                        }))
+                        .into_response(),
+                        _ => StatusCode::BAD_REQUEST.into_response(),
+                    }
+                },
+            ),
+        )
+        .route(
+            "/me",
+            axum::routing::get(
+                |axum::extract::Query(params): axum::extract::Query<
+                    std::collections::HashMap<String, String>,
+                >| async move {
+                    // The app must always send its proof with the token.
+                    assert!(params.contains_key("appsecret_proof"));
+                    match params.get("access_token").map(String::as_str) {
+                        Some("tok") => axum::Json(json!({
+                            "id": "fb1",
+                            "name": "Fb User",
+                            "email": "fb@example.com",
+                        }))
+                        .into_response(),
+                        Some("tok-noemail") => {
+                            axum::Json(json!({ "id": "fb2", "name": "No Mail" })).into_response()
+                        }
+                        _ => StatusCode::UNAUTHORIZED.into_response(),
+                    }
+                },
+            ),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    (url, handle)
+}
+
+async fn facebook_app(graph_url: &str) -> axum::Router {
+    let mut config = Config::for_tests();
+    config.facebook_app_id = Some("test-app-id".to_string());
+    config.facebook_app_secret = Some("test-app-secret".to_string());
+    config.facebook_graph_url = graph_url.to_string();
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    create_app(AppState::new(pool, config))
+}
+
+async fn facebook_login(app: &axum::Router, code: &str) -> (StatusCode, serde_json::Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/auth/facebook")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "code": code, "redirect_uri": "http://localhost:8081" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+    (status, json)
+}
+
+#[tokio::test]
+async fn facebook_login_exchanges_code_for_jwt() {
+    let (url, _server) = mock_graph().await;
+    let app = facebook_app(&url).await;
+    let (status, first) = facebook_login(&app, "good").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first["user"]["email"], "fb@example.com");
+    assert!(!first["token"].as_str().unwrap().is_empty());
+
+    // Logging in again returns the same user, not a duplicate.
+    let (status, second) = facebook_login(&app, "good").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(second["user"]["id"], first["user"]["id"]);
+
+    let response = app
+        .oneshot(
+            Request::get("/me")
+                .header(
+                    "authorization",
+                    format!("Bearer {}", first["token"].as_str().unwrap()),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn facebook_login_rejects_bad_code() {
+    let (url, _server) = mock_graph().await;
+    let app = facebook_app(&url).await;
+    let (status, _) = facebook_login(&app, "bogus").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn facebook_login_requires_email() {
+    let (url, _server) = mock_graph().await;
+    let app = facebook_app(&url).await;
+    let (status, body) = facebook_login(&app, "noemail").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], "Facebook account has no email address");
+}
+
+#[tokio::test]
+async fn facebook_login_disabled_without_config() {
+    let app = test_app().await;
+    let (status, _) = facebook_login(&app, "good").await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
 }

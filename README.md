@@ -59,6 +59,7 @@ App (phone): install Expo Go, run `npx expo start`, scan the QR code.
 | `META_API_KEY`  | _(none)_                             | Enables AI generation            |
 | `META_MODEL`    | `muse-spark-1.3`                     | Generation model                 |
 | `GOOGLE_CLIENT_ID` | _(none)_                          | Enables Google login (web client ID) |
+| `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET` | _(none)_       | Enables Facebook login             |
 | `RUST_LOG` | `info` | Log verbosity (`debug` shows every HTTP request) |
 
 ## Google login setup
@@ -73,6 +74,23 @@ App (phone): install Expo Go, run `npx expo start`, scan the QR code.
    With no client ID configured, the Google button stays disabled and the
    dev login keeps working. Native apps need a dev build plus their own
    iOS/Android client IDs (not wired yet).
+
+## Facebook login setup
+
+1. At [Meta for Developers](https://developers.facebook.com/), create an app
+   (type **Consumer**) and add the **Facebook Login** product.
+2. Under Facebook Login settings, add the app's address to **Valid OAuth
+   Redirect URIs** (e.g. `http://localhost:8081` for local web dev, plus
+   `http://localhost:8081/` with trailing slash — Facebook matches
+   exactly). The app builds its redirect with
+   `AuthSession.makeRedirectUri()`.
+3. In **App settings → Basic**, copy the App ID and App secret.
+4. Put them in `backend/.env` (`FACEBOOK_APP_ID=…`,
+   `FACEBOOK_APP_SECRET=…`) and the App ID in `app/.env`
+   (`EXPO_PUBLIC_FACEBOOK_APP_ID=…`), then restart both.
+   With nothing configured, the Facebook button stays disabled and the
+   dev login keeps working. Like Google, phone login needs a dev build
+   (OAuth redirects don't work in Expo Go).
 
 ## Roadmap
 

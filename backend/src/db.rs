@@ -11,6 +11,7 @@ const SCHEMA: &[&str] = &[
         email TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
         google_sub TEXT,
+        facebook_sub TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )",
     "CREATE TABLE IF NOT EXISTS subjects (
@@ -106,6 +107,7 @@ const SCHEMA: &[&str] = &[
 /// Each runs on boot; already-applied ones are ignored.
 const MIGRATIONS: &[&str] = &[
     "ALTER TABLE users ADD COLUMN google_sub TEXT",
+    "ALTER TABLE users ADD COLUMN facebook_sub TEXT",
     "ALTER TABLE categories RENAME TO subjects",
     "ALTER TABLE subcategories RENAME TO lessons",
     "ALTER TABLE lessons RENAME COLUMN category_id TO subject_id",
