@@ -102,6 +102,7 @@ export interface Lesson {
   questions: LessonQuestion[];
   images_pending: number;
   language: string;
+  background_url: string | null;
 }
 
 export interface AnswerResult {

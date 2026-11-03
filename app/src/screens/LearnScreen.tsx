@@ -47,6 +47,7 @@ export function LearnScreen({
   const [manualVoiceId, setManualVoiceId] = useState<string | null>(null);
   const [voicePickerOpen, setVoicePickerOpen] = useState(false);
   const [images, setImages] = useState<Record<string, string>>({});
+  const [backgroundUri, setBackgroundUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchingImages, setFetchingImages] = useState(false);
   const [imagesPending, setImagesPending] = useState(0);
@@ -72,6 +73,10 @@ export function LearnScreen({
     setError(null);
     try {
       const data = await api.lesson(token, lessonId);
+      // Decorative: loads alongside, never blocks or fails the lesson.
+      if (data.background_url) {
+        api.assetImage(token, data.background_url).then(setBackgroundUri, () => {});
+      }
       const urls = [
         ...new Set(
           data.questions.flatMap((q) => [
@@ -285,7 +290,7 @@ export function LearnScreen({
   }
 
   return (
-    <Screen>
+    <Screen backgroundUri={backgroundUri}>
       <View style={styles.topRow}>
         <TouchableOpacity onPress={() => onExit(lessonId)}>
           <Text style={styles.exit}>✕</Text>

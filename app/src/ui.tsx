@@ -1,6 +1,7 @@
 import React, { ReactNode, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -17,14 +18,24 @@ export function Screen({
   children,
   scrollRef,
   onViewportHeight,
+  backgroundUri,
 }: {
   children: ReactNode;
   scrollRef?: React.Ref<ScrollViewInstance>;
   onViewportHeight?: (height: number) => void;
+  backgroundUri?: string | null;
 }) {
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, backgroundUri != null && styles.transparent]}>
       <StatusBar style="dark" />
+      {backgroundUri != null && (
+        <Image
+          source={{ uri: backgroundUri }}
+          style={styles.background}
+          resizeMode="cover"
+          pointerEvents="none"
+        />
+      )}
       <ScrollView
         ref={scrollRef}
         onLayout={
@@ -226,6 +237,17 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  transparent: {
+    backgroundColor: 'transparent',
+  },
+  background: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
   },
   content: {
     padding: 20,
