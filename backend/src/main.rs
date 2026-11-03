@@ -10,6 +10,14 @@ async fn main() {
         .init();
     dotenvy::dotenv().ok();
     let config = Config::from_env();
+    // Set/missing flags only, never secret values: a headless NAS gives
+    // no other hint when the container starts without configuration.
+    tracing::info!(
+        meta_configured = config.meta_api_key.is_some(),
+        google_login = config.google_client_id.is_some(),
+        facebook_login = config.facebook_app_id.is_some() && config.facebook_app_secret.is_some(),
+        "integrations ready"
+    );
     let db = db::init_pool(&config.database_url)
         .await
         .expect("database init failed");
