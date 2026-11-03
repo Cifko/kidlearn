@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, User } from './src/api';
+import { api, SubjectSummary, User } from './src/api';
 import { LangProvider, useLang } from './src/i18n';
 import { CreateScreen } from './src/screens/CreateScreen';
 import { DetailScreen } from './src/screens/DetailScreen';
@@ -14,7 +14,7 @@ import { Screen } from './src/ui';
 type Route =
   | { name: 'login' }
   | { name: 'home' }
-  | { name: 'create' }
+  | { name: 'create'; basedOn?: SubjectSummary }
   | { name: 'detail'; id: number; focusLessonId?: number }
   | { name: 'learn'; subjectId: number; lessonId: number }
   | { name: 'prompts' };
@@ -70,11 +70,16 @@ function Shell() {
   }
 
   if (route.name === 'create') {
+    // Extending a subject returns to it on Back; plain creation to home.
+    const backRoute: Route = route.basedOn
+      ? { name: 'detail', id: route.basedOn.id }
+      : { name: 'home' };
     return (
       <CreateScreen
         token={token}
+        basedOn={route.basedOn}
         onDone={(id) => setRoute({ name: 'detail', id })}
-        onBack={() => setRoute({ name: 'home' })}
+        onBack={() => setRoute(backRoute)}
       />
     );
   }
@@ -100,6 +105,7 @@ function Shell() {
         onDeleted={() => setRoute({ name: 'home' })}
         onLearn={(lessonId) => setRoute({ name: 'learn', subjectId: route.id, lessonId })}
         onOpenSubject={(id) => setRoute({ name: 'detail', id })}
+        onExtend={(subject) => setRoute({ name: 'create', basedOn: subject })}
       />
     );
   }

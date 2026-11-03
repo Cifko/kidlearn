@@ -71,7 +71,8 @@ const en = {
   "response": "Response",
   "basedOn": "Based on",
   "createdBy": "Created by",
-  "copy": "Copy"
+  "copy": "Copy",
+  "extendThis": "Extend this"
 } as const;
 
 export type StringKey = keyof typeof en;
@@ -144,7 +145,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Odpoveď",
     "basedOn": "Nadväzuje na",
     "createdBy": "Vytvoril",
-    "copy": "Kopírovať"
+    "copy": "Kopírovať",
+    "extendThis": "Nadviazať"
   }
 ,
   ar:   {
@@ -213,7 +215,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "الرد",
     "basedOn": "مبني على",
     "createdBy": "أنشأه",
-    "copy": "نسخ"
+    "copy": "نسخ",
+    "extendThis": "توسيع هذا"
   },
   bg:   {
     "tagline": "Научи всичко, стъпка по стъпка.",
@@ -281,7 +284,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Отговор",
     "basedOn": "Базирано на",
     "createdBy": "Създадено от",
-    "copy": "Копирай"
+    "copy": "Копирай",
+    "extendThis": "Разшири това"
   },
   cs:   {
     "tagline": "Nauč se cokoli, krůček po krůčku.",
@@ -349,7 +353,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Odpověď",
     "basedOn": "Navazuje na",
     "createdBy": "Vytvořil",
-    "copy": "Kopírovat"
+    "copy": "Kopírovat",
+    "extendThis": "Navázat"
   },
   da:   {
     "tagline": "Lær alt, et lille skridt ad gangen.",
@@ -417,7 +422,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Svar",
     "basedOn": "Bygger på",
     "createdBy": "Oprettet af",
-    "copy": "Kopiér"
+    "copy": "Kopiér",
+    "extendThis": "Udvid denne"
   },
   de:   {
     "tagline": "Lerne alles, Schritt für Schritt.",
@@ -485,7 +491,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Antwort",
     "basedOn": "Baut auf",
     "createdBy": "Erstellt von",
-    "copy": "Kopieren"
+    "copy": "Kopieren",
+    "extendThis": "Erweitern"
   },
   el:   {
     "tagline": "Μάθε τα πάντα, ένα μικρό βηματάκι τη φορά.",
@@ -553,7 +560,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Απάντηση",
     "basedOn": "Βασίζεται σε",
     "createdBy": "Δημιουργήθηκε από",
-    "copy": "Αντιγραφή"
+    "copy": "Αντιγραφή",
+    "extendThis": "Επέκτεινέ το"
   },
   es:   {
     "tagline": "Aprende lo que quieras, pasito a pasito.",
@@ -621,7 +629,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Respuesta",
     "basedOn": "Basado en",
     "createdBy": "Creado por",
-    "copy": "Copiar"
+    "copy": "Copiar",
+    "extendThis": "Ampliar esto"
   },
   fi:   {
     "tagline": "Opi mitä vain, yksi pieni askel kerrallaan.",
@@ -689,7 +698,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Vastaus",
     "basedOn": "Perustuu",
     "createdBy": "Tekijä",
-    "copy": "Kopioi"
+    "copy": "Kopioi",
+    "extendThis": "Laajenna"
   },
   fr:   {
     "tagline": "Apprends tout, un petit pas à la fois.",
@@ -757,7 +767,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Réponse",
     "basedOn": "Basé sur",
     "createdBy": "Créé par",
-    "copy": "Copier"
+    "copy": "Copier",
+    "extendThis": "Étendre"
   },
   hi:   {
     "tagline": "कुछ भी सीखो, एक-एक छोटे कदम से.",
@@ -825,7 +836,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "उत्तर",
     "basedOn": "पर आधारित",
     "createdBy": "द्वारा बनाया गया",
-    "copy": "कॉपी करें"
+    "copy": "कॉपी करें",
+    "extendThis": "इसका विस्तार करें"
   },
   hr:   {
     "tagline": "Nauči bilo što, jedan mali korak po jedan.",
@@ -893,7 +905,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Odgovor",
     "basedOn": "Temelji se na",
     "createdBy": "Izradio",
-    "copy": "Kopiraj"
+    "copy": "Kopiraj",
+    "extendThis": "Proširi ovo"
   },
   hu:   {
     "tagline": "Tanulj bármit, egy kis lépésenként.",
@@ -961,7 +974,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Válasz",
     "basedOn": "Erre épül",
     "createdBy": "Készítette",
-    "copy": "Másolás"
+    "copy": "Másolás",
+    "extendThis": "Bővítés"
   },
   it:   {
     "tagline": "Impara tutto, un piccolo passo alla volta.",
@@ -1029,7 +1043,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Risposta",
     "basedOn": "Basato su",
     "createdBy": "Creato da",
-    "copy": "Copia"
+    "copy": "Copia",
+    "extendThis": "Amplia"
   },
   ja:   {
     "tagline": "ちいさな一歩ずつ、なんでも学ぼう.",
@@ -1097,7 +1112,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "へんじ",
     "basedOn": "基づく",
     "createdBy": "作成者",
-    "copy": "コピー"
+    "copy": "コピー",
+    "extendThis": "拡張する"
   },
   nl:   {
     "tagline": "Leer alles, één klein stapje tegelijk.",
@@ -1165,7 +1181,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Antwoord",
     "basedOn": "Gebaseerd op",
     "createdBy": "Gemaakt door",
-    "copy": "Kopiëren"
+    "copy": "Kopiëren",
+    "extendThis": "Breid dit uit"
   },
   no:   {
     "tagline": "Lær hva som helst, ett lite steg om gangen.",
@@ -1233,7 +1250,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Svar",
     "basedOn": "Bygger på",
     "createdBy": "Opprettet av",
-    "copy": "Kopiér"
+    "copy": "Kopiér",
+    "extendThis": "Utvid denne"
   },
   pl:   {
     "tagline": "Ucz się wszystkiego, małymi kroczkami.",
@@ -1301,7 +1319,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Odpowiedź",
     "basedOn": "Bazuje na",
     "createdBy": "Utworzył",
-    "copy": "Kopiuj"
+    "copy": "Kopiuj",
+    "extendThis": "Rozszerz to"
   },
   pt:   {
     "tagline": "Aprende qualquer coisa, um passinho de cada vez.",
@@ -1369,7 +1388,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Resposta",
     "basedOn": "Baseado em",
     "createdBy": "Criado por",
-    "copy": "Copiar"
+    "copy": "Copiar",
+    "extendThis": "Ampliar isto"
   },
   ro:   {
     "tagline": "Învață orice, pas cu pas.",
@@ -1437,7 +1457,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Răspuns",
     "basedOn": "Bazat pe",
     "createdBy": "Creat de",
-    "copy": "Copiază"
+    "copy": "Copiază",
+    "extendThis": "Extinde"
   },
   ru:   {
     "tagline": "Учись чему угодно, шаг за шагом!",
@@ -1505,7 +1526,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Ответ",
     "basedOn": "Основано на",
     "createdBy": "Автор",
-    "copy": "Копировать"
+    "copy": "Копировать",
+    "extendThis": "Расширить"
   },
   sl:   {
     "tagline": "Nauči se karkoli, korak za korakom.",
@@ -1573,7 +1595,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Odgovor",
     "basedOn": "Temelji na",
     "createdBy": "Ustvaril",
-    "copy": "Kopiraj"
+    "copy": "Kopiraj",
+    "extendThis": "Razširi"
   },
   sr:   {
     "tagline": "Научи било шта, корак по корак.",
@@ -1641,7 +1664,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Одговор",
     "basedOn": "Засновано на",
     "createdBy": "Направио",
-    "copy": "Копирај"
+    "copy": "Копирај",
+    "extendThis": "Прошири ово"
   },
   sv:   {
     "tagline": "Lär dig vad som helst, ett litet steg i taget.",
@@ -1709,7 +1733,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Svar",
     "basedOn": "Bygger på",
     "createdBy": "Skapad av",
-    "copy": "Kopiera"
+    "copy": "Kopiera",
+    "extendThis": "Utöka denna"
   },
   tr:   {
     "tagline": "Her şeyi, minik adımlarla öğren.",
@@ -1777,7 +1802,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Yanıt",
     "basedOn": "Temeli",
     "createdBy": "Oluşturan",
-    "copy": "Kopyala"
+    "copy": "Kopyala",
+    "extendThis": "Genişlet"
   },
   uk:   {
     "tagline": "Вивчай будь-що, маленькими кроками.",
@@ -1845,7 +1871,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "Відповідь",
     "basedOn": "Ґрунтується на",
     "createdBy": "Автор",
-    "copy": "Копіювати"
+    "copy": "Копіювати",
+    "extendThis": "Розширити"
   },
   zh:   {
     "tagline": "一次一小步，轻松学会任何知识。",
@@ -1913,7 +1940,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "response": "回答",
     "basedOn": "基于",
     "createdBy": "创建者",
-    "copy": "复制"
+    "copy": "复制",
+    "extendThis": "扩展"
   }
 };
 

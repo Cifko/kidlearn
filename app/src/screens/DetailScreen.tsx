@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { api, ApiError, SubjectDetail, LessonProgress } from '../api';
+import { api, ApiError, SubjectDetail, LessonProgress, SubjectSummary } from '../api';
 import { useLang } from '../i18n';
 import { languageLabel } from '../languages';
 import { colors } from '../theme';
@@ -21,6 +21,7 @@ export function DetailScreen({
   onDeleted,
   onLearn,
   onOpenSubject,
+  onExtend,
 }: {
   token: string;
   subjectId: number;
@@ -29,6 +30,7 @@ export function DetailScreen({
   onDeleted: () => void;
   onLearn: (lessonId: number) => void;
   onOpenSubject: (subjectId: number) => void;
+  onExtend: (subject: SubjectSummary) => void;
 }) {
   const { t } = useLang();
   const [detail, setDetail] = useState<SubjectDetail | null>(null);
@@ -298,6 +300,11 @@ export function DetailScreen({
           ) : (
             <Text style={styles.likeCount}>★ {detail.like_count}</Text>
           )}
+          {detail.visibility === 'public' && (
+            <View style={styles.extendRow}>
+              <ChunkyButton title={t('extendThis')} onPress={() => onExtend(detail)} />
+            </View>
+          )}
           <View
             style={styles.list}
             onLayout={(event) => {
@@ -516,6 +523,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   likeRow: {
+    marginTop: 16,
+  },
+  extendRow: {
     marginTop: 16,
   },
   likeCount: {

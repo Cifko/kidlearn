@@ -9,10 +9,12 @@ type Phase = 'editing' | 'creating' | 'generating';
 
 export function CreateScreen({
   token,
+  basedOn,
   onDone,
   onBack,
 }: {
   token: string;
+  basedOn?: SubjectSummary;
   onDone: (id: number) => void;
   onBack: () => void;
 }) {
@@ -26,7 +28,7 @@ export function CreateScreen({
   const [prereqQuery, setPrereqQuery] = useState('');
   const [prereqResults, setPrereqResults] = useState<SubjectSummary[]>([]);
   const [prereqBusy, setPrereqBusy] = useState(false);
-  const [prereqs, setPrereqs] = useState<SubjectSummary[]>([]);
+  const [prereqs, setPrereqs] = useState<SubjectSummary[]>(basedOn ? [basedOn] : []);
   const [phase, setPhase] = useState<Phase>('editing');
   const [error, setError] = useState<string | null>(null);
 
