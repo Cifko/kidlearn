@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/subjects/{id}/generate", post(generate_subject))
         .route("/assets/{id}/image", get(asset_image))
+        .route("/subjects/{id}/background", get(subject_background))
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -176,6 +177,7 @@ async fn generate_subject(
                         .await;
                     tracing::info!("generation ready");
                     // Best effort: anything still missing renders on first view.
+                    prefill_background(&pool, &client, subject.id).await;
                     pregenerate_images(&pool, &client, subject.id).await;
                 }
                 Err(err) => {
@@ -543,6 +545,60 @@ async fn pregenerate_images(pool: &sqlx::SqlitePool, client: &MetaClient, subjec
     tracing::info!(rendered = total - failed, failed, "image prefill done");
 }
 
+/// Renders the subject's ambient background and caches its bytes.
+/// Subjects have no title/description editing, so a cached background
+/// never goes stale and regenerations keep it.
+async fn render_and_store_background(
+    pool: &sqlx::SqlitePool,
+    client: &MetaClient,
+    ctx: &CallContext,
+    subject_id: i64,
+    topic: &str,
+) -> Result<(Vec<u8>, String), AppError> {
+    let (bytes, mime) = client
+        .generate_image(ctx, &prompts::render_background(topic))
+        .await?;
+    sqlx::query(
+        "UPDATE subjects SET background_blob = ?, background_mime = ? WHERE id = ? AND background_blob IS NULL",
+    )
+    .bind(&bytes)
+    .bind(&mime)
+    .bind(subject_id)
+    .execute(pool)
+    .await?;
+    Ok((bytes, mime))
+}
+
+/// Prefills the background after a successful generation, unless one is
+/// already cached. Best effort: failures fall back to lazy rendering.
+async fn prefill_background(pool: &sqlx::SqlitePool, client: &MetaClient, subject_id: i64) {
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT title, description FROM subjects WHERE id = ? AND background_blob IS NULL",
+    )
+    .bind(subject_id)
+    .fetch_optional(pool)
+    .await
+    .unwrap_or(None);
+    let Some((title, description)) = row else {
+        return;
+    };
+    let topic = if description.trim().is_empty() {
+        title.clone()
+    } else {
+        format!("{} ({})", title, description.trim())
+    };
+    let ctx = CallContext {
+        kind: "background",
+        subject_id: Some(subject_id),
+        label: title.chars().take(80).collect(),
+        ..Default::default()
+    };
+    match render_and_store_background(pool, client, &ctx, subject_id, &topic).await {
+        Ok(_) => tracing::info!("background prefill done"),
+        Err(err) => tracing::warn!(error = ?err, "background prefill failed"),
+    }
+}
+
 /// Renders one image and caches its bytes.
 async fn render_and_store_image(
     pool: &sqlx::SqlitePool,
@@ -763,6 +819,54 @@ async fn asset_image(
         label: key,
     };
     let (bytes, mime) = render_and_store_image(&state.db, &client, &ctx, id, &spec_json).await?;
+    Ok(image_response(bytes, mime))
+}
+
+/// One row of the background lookup: title, description, cached bytes,
+/// cached MIME.
+type BackgroundRow = (String, String, Option<Vec<u8>>, Option<String>);
+
+/// Serves a subject's ambient background, generating and caching it on
+/// first request (covers subjects created before backgrounds existed).
+async fn subject_background(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<impl IntoResponse, AppError> {
+    let row: Option<BackgroundRow> = sqlx::query_as(
+        "SELECT title, description, background_blob, background_mime FROM subjects c
+         WHERE c.id = ? AND (c.visibility = 'public' OR c.owner_id = ?)",
+    )
+    .bind(id)
+    .bind(auth.0.id)
+    .fetch_optional(&state.db)
+    .await?;
+    let (title, description, cached_blob, cached_mime) =
+        row.ok_or_else(|| AppError::NotFound("subject not found".to_string()))?;
+    if let (Some(blob), Some(mime)) = (cached_blob, cached_mime) {
+        return Ok(image_response(blob, mime));
+    }
+
+    let Some(client) = MetaClient::from_config(&state.config)
+        .map(|client| client.with_recorder(state.db.clone(), auth.0.id))
+    else {
+        tracing::warn!("background requested but META_API_KEY is not set");
+        return Err(AppError::ServiceUnavailable(
+            "META_API_KEY is not configured; image generation is disabled".to_string(),
+        ));
+    };
+    let topic = if description.trim().is_empty() {
+        title.clone()
+    } else {
+        format!("{} ({})", title, description.trim())
+    };
+    let ctx = CallContext {
+        kind: "background",
+        subject_id: Some(id),
+        label: title.chars().take(80).collect(),
+        ..Default::default()
+    };
+    let (bytes, mime) = render_and_store_background(&state.db, &client, &ctx, id, &topic).await?;
     Ok(image_response(bytes, mime))
 }
 

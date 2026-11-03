@@ -26,6 +26,8 @@ const SCHEMA: &[&str] = &[
         generated_lessons INTEGER NOT NULL DEFAULT 0,
         grade INTEGER,
         modality TEXT NOT NULL DEFAULT 'auto',
+        background_blob BLOB,
+        background_mime TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )",
     "CREATE TABLE IF NOT EXISTS lessons (
@@ -119,6 +121,8 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE subjects ADD COLUMN modality TEXT NOT NULL DEFAULT 'auto'",
     "ALTER TABLE questions ADD COLUMN figure_asset TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE questions ADD COLUMN plot_json TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE subjects ADD COLUMN background_blob BLOB",
+    "ALTER TABLE subjects ADD COLUMN background_mime TEXT",
 ];
 
 pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {

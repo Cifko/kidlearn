@@ -62,6 +62,9 @@ struct Lesson {
     /// Subject content language (e.g. "en", "sk"): the narrator reads
     /// the questions in this language.
     language: String,
+    /// Ambient background for the lesson screen. Always present: bytes
+    /// generate lazily on first request.
+    background_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -267,6 +270,7 @@ async fn get_lesson(
         questions: lesson_questions,
         images_pending,
         language: sub.language,
+        background_url: Some(format!("/subjects/{}/background", sub.subject_id)),
     }))
 }
 

@@ -155,7 +155,7 @@ async fn list_subjects(
     let mut sql =
         format!("SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)");
     let mut param = 2;
-    if let Some(id) = id_query {
+    if id_query.is_some() {
         sql.push_str(&format!(" AND c.id = ?{param}"));
         param += 1;
     } else if !needle.is_empty() {

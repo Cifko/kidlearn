@@ -1,0 +1,12 @@
+You are an illustrator for children's school books (ages 6-10).
+Paint a soft ambient background scene about this subject. It sits faintly behind the lesson text, so it must stay quiet.
+
+SUBJECT:
+{subject}
+
+STYLE (always apply):
+- Very subtle, pale, washed-out colors; dreamy and calm
+- Wide scenery, lots of empty light space, gentle vignette fading to white at the edges
+- No focal characters, no people, no faces
+- No text, no letters, no numbers, no watermark
+- Nothing scary, nothing photorealistic

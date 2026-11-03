@@ -156,6 +156,169 @@ async fn image_serves_cached_bytes() {
 }
 
 #[tokio::test]
+async fn background_serves_cached_bytes() {
+    let (pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let subject_id = create_subject_id(&app, &token).await;
+    let png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00];
+    sqlx::query(
+        "UPDATE subjects SET background_blob = ?, background_mime = 'image/png' WHERE id = ?",
+    )
+    .bind(&png)
+    .bind(subject_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let response = app
+        .oneshot(
+            Request::get(format!("/subjects/{subject_id}/background"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "image/png");
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    assert_eq!(body.as_ref(), png.as_slice());
+}
+
+#[tokio::test]
+async fn background_guards_others_private_subject() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    // Second dev user owns a private subject.
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/auth/dev-login")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"who":"dev2"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let login: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let other = login["token"].as_str().unwrap().to_string();
+    let hidden_id = create_subject_id(&app, &other).await;
+
+    for id in [hidden_id, 999999] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/subjects/{id}/background"))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+}
+
+/// Full generation prefills the background without any view request:
+/// the recorded call appears on its own, then the endpoint serves it.
+#[tokio::test]
+async fn generate_prefills_subject_background() {
+    let (url, _server) = mock_lesson_backend(LESSON_FIXTURE).await;
+    let mut config = Config::for_tests();
+    config.meta_api_key = Some("test-key".to_string());
+    config.meta_api_base = url;
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    let app = create_app(AppState::new(pool, config));
+    let token = login_token(&app).await;
+    let id = create_subject_id(&app, &token).await;
+
+    start_mock_generation(&app, &token, id).await;
+    let detail = wait_until_settled(&app, &token, id).await;
+    assert_eq!(detail["status"], "ready");
+
+    let mut prompt = String::new();
+    for _ in 0..100 {
+        let calls = list_calls(&app, &token, "?kind=background").await;
+        if !calls.as_array().unwrap().is_empty() {
+            prompt = calls[0]["prompt"].as_str().unwrap().to_string();
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(prompt.contains("Math"), "prompt: {prompt}");
+    assert!(prompt.contains("No text"), "prompt: {prompt}");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/subjects/{id}/background"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "image/png");
+
+    let lesson_id = detail["lessons"][0]["id"].as_i64().unwrap();
+    let response = app
+        .oneshot(
+            Request::get(format!("/lessons/{lesson_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    let lesson: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        lesson["background_url"],
+        format!("/subjects/{id}/background")
+    );
+}
+
+/// Subjects created before backgrounds existed render on first request.
+#[tokio::test]
+async fn background_generates_lazily_on_first_request() {
+    let (url, _server) = mock_lesson_backend(LESSON_FIXTURE).await;
+    let mut config = Config::for_tests();
+    config.meta_api_key = Some("test-key".to_string());
+    config.meta_api_base = url;
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    let app = create_app(AppState::new(pool, config));
+    let token = login_token(&app).await;
+    let id = create_subject_id(&app, &token).await;
+
+    for _ in 0..2 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/subjects/{id}/background"))
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], "image/png");
+    }
+    // Generated once, served from cache the second time.
+    let calls = list_calls(&app, &token, "?kind=background").await;
+    assert_eq!(calls.as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn image_missing_asset_returns_404() {
     let (_pool, app) = test_state().await;
     let token = login_token(&app).await;

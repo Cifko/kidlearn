@@ -2,6 +2,7 @@ const PLAN: &str = include_str!("../prompts/plan.txt");
 const QUESTIONS: &str = include_str!("../prompts/questions.txt");
 const IMAGE: &str = include_str!("../prompts/image.txt");
 const SEARCH: &str = include_str!("../prompts/search.txt");
+const BACKGROUND: &str = include_str!("../prompts/background.txt");
 
 /// Audience line for the prompts. Grade 5 means high school and above.
 fn audience_label(grade: Option<i64>) -> &'static str {
@@ -95,6 +96,10 @@ pub fn render_questions(
 
 pub fn render_image(asset_json: &str) -> String {
     IMAGE.replace("{asset_json}", asset_json)
+}
+
+pub fn render_background(subject: &str) -> String {
+    BACKGROUND.replace("{subject}", subject)
 }
 
 pub fn render_search(query: &str, subjects_json: &str, max_results: i64) -> String {
@@ -199,6 +204,15 @@ mod tests {
         assert!(prompt.contains(r#"{"id":"red_ball"}"#));
         assert!(prompt.contains("children's school books"));
         assert!(!prompt.contains("{asset_json}"));
+    }
+
+    #[test]
+    fn background_prompt_stays_subtle_and_text_free() {
+        let prompt = render_background("World War 2 (battles and home front)");
+        assert!(prompt.contains("World War 2 (battles and home front)"));
+        assert!(prompt.contains("faintly behind"));
+        assert!(prompt.contains("No text"));
+        assert!(!prompt.contains("{subject}"));
     }
 
     #[test]
