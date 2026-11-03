@@ -1,6 +1,6 @@
 import type { Lang } from './i18n';
 import { LANGUAGES } from './languages';
-import { FRAC_WORD, MATH_WORDS, POWER_WORD, SUB_WORD } from './math-words';
+import { FRAC_WORD, MATH_WORDS, MINUS_WORD, POWER_WORD, SUB_WORD } from './math-words';
 
 // Pure text utilities: no React Native imports, so this module is runnable
 // in plain node for testing.
@@ -54,6 +54,10 @@ for (const { code } of LANGUAGES) {
 function texToSpeech(tex: string, lang: Lang): string {
   const fracWord = FRAC_WORD[lang];
   let s = ` ${tex} `;
+  // Infix minus first, on the raw formula: voices read "5-2" as a range
+  // ("five to two"). Leading signs ("-5") are left for the voice.
+  s = s.replace(/[–—]/g, '-');
+  s = s.replace(/(?<!\\)(\S)\s*-\s*(?=\S)/g, `$1 ${MINUS_WORD[lang]} `);
   // A limit's subscript is read inline ("limit x approaches 0"), not as "sub".
   s = s.replace(/\\lim(?![a-zA-Z])_/g, '\\lim ');
   // Innermost fractions first, so nesting resolves from the inside out.
@@ -105,24 +109,32 @@ export interface NarratorVoiceOption {
  * instead often lands on the worst option (e.g. eSpeak, or an English
  * voice reading Czech).
  */
+function baseLanguage(tag: string): string {
+  return tag.toLowerCase().replace(/_/g, '-').split('-')[0];
+}
+
+/** Device voices speaking the tag's language, in device order. */
+export function matchingNarratorVoices(
+  voices: NarratorVoiceOption[],
+  ttsTag: string,
+): NarratorVoiceOption[] {
+  const base = baseLanguage(ttsTag);
+  if (base === '') {
+    return [];
+  }
+  return voices.filter((voice) => baseLanguage(voice.language) === base);
+}
+
 export function pickNarratorVoice(
   voices: NarratorVoiceOption[],
   ttsTag: string,
 ): NarratorVoiceOption | null {
   const tag = ttsTag.toLowerCase().replace(/_/g, '-');
-  const base = tag.split('-')[0];
-  if (base === '') {
-    return null;
-  }
   let best: NarratorVoiceOption | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
-  for (const voice of voices) {
-    const lang = voice.language.toLowerCase().replace(/_/g, '-');
-    if (lang.split('-')[0] !== base) {
-      continue;
-    }
+  for (const voice of matchingNarratorVoices(voices, ttsTag)) {
     let score = 0;
-    if (lang === tag) {
+    if (voice.language.toLowerCase().replace(/_/g, '-') === tag) {
       score += 4;
     }
     const name = voice.name.toLowerCase();

@@ -1162,3 +1162,34 @@ export const SUB_WORD: Record<Lang, string> = {
   "uk": "з індексом",
   "zh": "下标"
 };
+
+export const MINUS_WORD: Record<Lang, string> = {
+  "en": "minus",
+  "sk": "mínus",
+  "ar": "ناقص",
+  "bg": "минус",
+  "cs": "mínus",
+  "da": "minus",
+  "de": "minus",
+  "el": "μείον",
+  "es": "menos",
+  "fi": "miinus",
+  "fr": "moins",
+  "hi": "माइनस",
+  "hr": "minus",
+  "hu": "mínusz",
+  "it": "meno",
+  "ja": "ひく",
+  "nl": "min",
+  "no": "minus",
+  "pl": "minus",
+  "pt": "menos",
+  "ro": "minus",
+  "ru": "минус",
+  "sl": "minus",
+  "sr": "минус",
+  "sv": "minus",
+  "tr": "eksi",
+  "uk": "мінус",
+  "zh": "减"
+};

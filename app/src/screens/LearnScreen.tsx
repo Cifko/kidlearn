@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Dimensions,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { api, ApiError, AnswerResult, Lesson } from '../api';
@@ -7,7 +16,12 @@ import { Lang, useLang } from '../i18n';
 import { MathText, stripMathForMeasure } from '../math';
 import { Owl } from '../owl';
 import { PlotView } from '../plot';
-import { pickNarratorVoice, resolveSpeechLanguage, stripMathForSpeech } from '../tex';
+import {
+  matchingNarratorVoices,
+  pickNarratorVoice,
+  resolveSpeechLanguage,
+  stripMathForSpeech,
+} from '../tex';
 import { OPTION_INNER, optionFontSize } from '../text-fit';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
@@ -30,6 +44,8 @@ export function LearnScreen({
   const [narratorEnabled, setNarratorEnabled] = useState(true);
   const [voices, setVoices] = useState<Speech.Voice[]>([]);
   const [voicesLoaded, setVoicesLoaded] = useState(false);
+  const [manualVoiceId, setManualVoiceId] = useState<string | null>(null);
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false);
   const [images, setImages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [fetchingImages, setFetchingImages] = useState(false);
@@ -189,11 +205,49 @@ export function LearnScreen({
   // Primitives, so the effect below only re-runs when they really change.
   const ttsLang = speech?.tts ?? null;
   const mathLang = speech?.math ?? null;
-  const narratorVoice = useMemo(
-    () => (ttsLang ? pickNarratorVoice(voices, ttsLang) : null),
+  const matchingVoices = useMemo(
+    () => (ttsLang ? matchingNarratorVoices(voices, ttsLang) : []),
     [voices, ttsLang],
   );
+  const narratorVoice = useMemo(() => {
+    const manual =
+      manualVoiceId != null
+        ? matchingVoices.find((voice) => voice.identifier === manualVoiceId)
+        : undefined;
+    if (manual) {
+      return manual;
+    }
+    return ttsLang ? pickNarratorVoice(voices, ttsLang) : null;
+  }, [manualVoiceId, matchingVoices, voices, ttsLang]);
   const narratorVoiceId = narratorVoice?.identifier ?? null;
+
+  // Manual voice choice, remembered per language. A stored voice that is
+  // gone (uninstalled) quietly falls back to automatic.
+  useEffect(() => {
+    if (ttsLang === null) {
+      return;
+    }
+    const base = ttsLang.split('-')[0];
+    AsyncStorage.getItem(`kidlearn.voice.${base}`).then((value) => {
+      setManualVoiceId(value === null || value === '' ? null : value);
+    });
+  }, [ttsLang]);
+
+  async function chooseVoice(identifier: string) {
+    setVoicePickerOpen(false);
+    if (ttsLang === null) {
+      return;
+    }
+    const base = ttsLang.split('-')[0];
+    if (identifier === manualVoiceId) {
+      // Tapping the active manual voice drops back to automatic.
+      setManualVoiceId(null);
+      await AsyncStorage.setItem(`kidlearn.voice.${base}`, '');
+    } else {
+      setManualVoiceId(identifier);
+      await AsyncStorage.setItem(`kidlearn.voice.${base}`, identifier);
+    }
+  }
   const showVoiceWarning =
     narratorEnabled && ttsLang !== null && voicesLoaded && narratorVoice === null;
 
@@ -300,7 +354,48 @@ export function LearnScreen({
               />
             </View>
           </View>
+          {narratorEnabled && narratorVoice !== null &&
+            (matchingVoices.length > 1 ? (
+              <TouchableOpacity onPress={() => setVoicePickerOpen(true)}>
+                <Text style={styles.voiceLine}>{narratorVoice.name} ▾</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.voiceLine}>{narratorVoice.name}</Text>
+            ))}
           {showVoiceWarning && <Text style={styles.voiceWarning}>{t('noVoice')}</Text>}
+          <Modal
+            visible={voicePickerOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setVoicePickerOpen(false)}
+          >
+            <View style={styles.voiceBackdrop}>
+              <TouchableOpacity
+                style={StyleSheet.absoluteFill}
+                activeOpacity={1}
+                onPress={() => setVoicePickerOpen(false)}
+              />
+              <View style={styles.voiceSheet}>
+                <ScrollView keyboardShouldPersistTaps="handled">
+                  {matchingVoices.map((voice) => {
+                    const active = voice.identifier === narratorVoiceId;
+                    return (
+                      <TouchableOpacity
+                        key={voice.identifier}
+                        onPress={() => chooseVoice(voice.identifier)}
+                        style={[styles.voiceRow, active && styles.voiceRowActive]}
+                      >
+                        <Text style={styles.voiceRowText}>
+                          {voice.name} <Text style={styles.voiceRowLang}>{voice.language}</Text>
+                        </Text>
+                        {active && <Text style={styles.voiceCheck}>✓</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
           {current?.plot != null && (
             <PlotView
               plot={current.plot}
@@ -472,6 +567,51 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: -8,
     marginBottom: 16,
+  },
+  voiceLine: {
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: -8,
+    marginBottom: 16,
+  },
+  voiceBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  voiceSheet: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    maxHeight: 420,
+    paddingVertical: 8,
+  },
+  voiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  voiceRowActive: {
+    backgroundColor: '#EEF6FF',
+  },
+  voiceRowText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  voiceRowLang: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: colors.muted,
+  },
+  voiceCheck: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.blue,
   },
   options: {
     flexDirection: 'row',
