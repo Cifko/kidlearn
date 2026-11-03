@@ -1,14 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Speech from 'expo-speech';
 import { api, ApiError, AnswerResult, Lesson } from '../api';
 import { useLang } from '../i18n';
 import { MathText, stripMathForMeasure } from '../math';
+import { Owl } from '../owl';
 import { PlotView } from '../plot';
+import { resolveSpeechLanguage, SpeechLang, stripMathForSpeech } from '../tex';
 import { OPTION_INNER, optionFontSize } from '../text-fit';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
 
 const HEARTS_PER_RUN = 3;
+// Owl width plus the gap beside the question text.
+const OWL_SPACE = 68;
 
 export function LearnScreen({
   token,
@@ -19,8 +25,9 @@ export function LearnScreen({
   lessonId: number;
   onExit: () => void;
 }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [narratorEnabled, setNarratorEnabled] = useState(true);
   const [images, setImages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [fetchingImages, setFetchingImages] = useState(false);
@@ -79,6 +86,19 @@ export function LearnScreen({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    AsyncStorage.getItem('kidlearn.narrator').then((value) => {
+      if (value !== null) {
+        setNarratorEnabled(value === '1');
+      }
+    });
+  }, []);
+
+  const speakQuestion = useCallback((text: string, ttsLang: string, mathLang: SpeechLang) => {
+    Speech.stop();
+    Speech.speak(stripMathForSpeech(text, mathLang), { language: ttsLang, rate: 0.95 });
+  }, []);
 
   function resetRun() {
     setIndex(0);
@@ -147,6 +167,45 @@ export function LearnScreen({
   const isTextQuestion = current != null && current.options[0]?.text != null;
   const figureUrl = current?.image_url ?? null;
   const figure = figureUrl != null ? images[figureUrl] : undefined;
+  const questionText =
+    !over && !loading && !error && lesson && total > 0 ? lesson.questions[index].text : null;
+  const speech = lesson ? resolveSpeechLanguage(lesson.language, lang) : null;
+  // Primitives, so the effect below only re-runs when they really change.
+  const ttsLang = speech?.tts ?? null;
+  const mathLang = speech?.math ?? null;
+
+  // The narrator reads each question aloud; moving on (or leaving) stops it.
+  useEffect(() => {
+    if (!narratorEnabled || questionText === null || ttsLang === null || mathLang === null) {
+      if (!narratorEnabled) {
+        Speech.stop();
+      }
+      return;
+    }
+    speakQuestion(questionText, ttsLang, mathLang);
+    return () => {
+      Speech.stop();
+    };
+  }, [narratorEnabled, questionText, ttsLang, mathLang, speakQuestion]);
+
+  async function toggleNarrator() {
+    const next = !narratorEnabled;
+    setNarratorEnabled(next);
+    await AsyncStorage.setItem('kidlearn.narrator', next ? '1' : '0');
+  }
+
+  function replayQuestion() {
+    if (questionText === null || ttsLang === null || mathLang === null) {
+      return;
+    }
+    if (!narratorEnabled) {
+      // Tapping the sleeping owl wakes it; the effect reads the question.
+      setNarratorEnabled(true);
+      AsyncStorage.setItem('kidlearn.narrator', '1');
+      return;
+    }
+    speakQuestion(questionText, ttsLang, mathLang);
+  }
 
   return (
     <Screen>
@@ -158,6 +217,9 @@ export function LearnScreen({
           <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
         </View>
         <Text style={styles.hearts}>{'♥'.repeat(Math.max(0, hearts))}</Text>
+        <TouchableOpacity onPress={toggleNarrator}>
+          <Text style={styles.sound}>{narratorEnabled ? '🔊' : '🔇'}</Text>
+        </TouchableOpacity>
       </View>
 
       {loading && (
@@ -203,11 +265,18 @@ export function LearnScreen({
       {!loading && !error && lesson && total > 0 && !over && (
         <>
           <Text style={styles.subTitle}>{lesson.title}</Text>
-          <MathText
-            text={lesson.questions[index].text}
-            style={styles.question}
-            maxWidth={Math.min(Dimensions.get('window').width, 640) - 40}
-          />
+          <View style={styles.questionRow}>
+            <TouchableOpacity onPress={replayQuestion} style={styles.owlButton}>
+              <Owl size={56} awake={narratorEnabled} />
+            </TouchableOpacity>
+            <View style={styles.questionBody}>
+              <MathText
+                text={lesson.questions[index].text}
+                style={styles.question}
+                maxWidth={Math.min(Dimensions.get('window').width, 640) - 40 - OWL_SPACE}
+              />
+            </View>
+          </View>
           {current?.plot != null && (
             <PlotView
               plot={current.plot}
@@ -316,6 +385,10 @@ const styles = StyleSheet.create({
     color: colors.red,
     minWidth: 54,
   },
+  sound: {
+    fontSize: 20,
+    padding: 4,
+  },
   muted: {
     fontSize: 15,
     color: colors.muted,
@@ -358,6 +431,17 @@ const styles = StyleSheet.create({
     color: colors.ink,
     marginTop: 6,
     marginBottom: 20,
+  },
+  questionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  owlButton: {
+    paddingTop: 2,
+  },
+  questionBody: {
+    flex: 1,
   },
   options: {
     flexDirection: 'row',

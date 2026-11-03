@@ -374,6 +374,23 @@ async fn second_lesson_locks_until_first_is_attempted() {
 }
 
 #[tokio::test]
+async fn lesson_reports_subject_language() {
+    let seed = seed().await;
+    let (status, lesson) =
+        get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub1)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(lesson["language"], "en");
+
+    sqlx::query("UPDATE subjects SET language = 'sk' WHERE id = ?")
+        .bind(seed.subject_id)
+        .execute(&seed.pool)
+        .await
+        .unwrap();
+    let (_, lesson) = get_json(&seed.app, &seed.token, format!("/lessons/{}", seed.sub1)).await;
+    assert_eq!(lesson["language"], "sk");
+}
+
+#[tokio::test]
 async fn lesson_reports_pending_images() {
     let seed = seed().await;
     let (status, lesson) =

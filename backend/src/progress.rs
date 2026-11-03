@@ -26,6 +26,7 @@ struct LessonWithSubject {
     summary: String,
     owner_id: i64,
     visibility: String,
+    language: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,6 +59,9 @@ struct Lesson {
     /// Assets whose images are not rendered yet: the client shows a
     /// "generating pictures" state instead of a bare loading spinner.
     images_pending: i64,
+    /// Subject content language (e.g. "en", "sk"): the narrator reads
+    /// the questions in this language.
+    language: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,7 +117,8 @@ async fn visible_sub(
     sub_id: i64,
 ) -> Result<LessonWithSubject, AppError> {
     sqlx::query_as::<_, LessonWithSubject>(
-        "SELECT s.id, s.subject_id, s.position, s.title, s.summary, c.owner_id, c.visibility
+        "SELECT s.id, s.subject_id, s.position, s.title, s.summary, c.owner_id, c.visibility,
+            c.language
          FROM lessons s JOIN subjects c ON c.id = s.subject_id WHERE s.id = ?",
     )
     .bind(sub_id)
@@ -261,6 +266,7 @@ async fn get_lesson(
         summary: sub.summary,
         questions: lesson_questions,
         images_pending,
+        language: sub.language,
     }))
 }
 

@@ -8,6 +8,9 @@ import { liteAdaptor } from 'mathjax-full/js/adaptors/liteAdaptor.js';
 import { RegisterHTMLHandler } from 'mathjax-full/js/handlers/html.js';
 import 'mathjax-full/js/input/tex/ams/AmsConfiguration.js';
 import 'mathjax-full/js/input/tex/newcommand/NewcommandConfiguration.js';
+import { splitMathSpans } from './tex';
+
+export { stripMathForMeasure } from './tex';
 
 // MathJax without a DOM: TeX in, self-contained SVG out (glyph paths are
 // inlined, so rendering works offline). One code path for web and native.
@@ -57,39 +60,6 @@ function texToSvg(source: string): RenderedMath | null {
   }
   renderCache.set(source, result);
   return result;
-}
-
-export type MathSpan = { kind: 'text'; text: string } | { kind: 'math'; tex: string };
-
-const MATH_RE = /\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g;
-
-/** Splits \(...\) and \[...\] spans out of a question/option string. */
-export function splitMathSpans(input: string): MathSpan[] {
-  const spans: MathSpan[] = [];
-  let last = 0;
-  MATH_RE.lastIndex = 0;
-  for (;;) {
-    const match = MATH_RE.exec(input);
-    if (match === null) {
-      break;
-    }
-    if (match.index > last) {
-      spans.push({ kind: 'text', text: input.slice(last, match.index) });
-    }
-    spans.push({ kind: 'math', tex: (match[1] ?? match[2]).trim() });
-    last = match.index + match[0].length;
-  }
-  if (last < input.length) {
-    spans.push({ kind: 'text', text: input.slice(last) });
-  }
-  return spans;
-}
-
-/** Placeholder width for the font-size heuristic: math is measured as text. */
-export function stripMathForMeasure(input: string): string {
-  return splitMathSpans(input)
-    .map((span) => (span.kind === 'math' ? 'XXXXXX' : span.text))
-    .join('');
 }
 
 function MathSvg({
