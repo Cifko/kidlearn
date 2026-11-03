@@ -3,8 +3,8 @@ import { LANGUAGES } from './languages';
 
 export type Lang = (typeof LANGUAGES)[number]['code'];
 
-// UI strings. English and Slovak are hand-written; the other locales were
-// machine-translated and are waiting for a native speaker's review.
+// UI strings, one table per app language. English is the source the
+// others were translated from; it is also the default, nothing more.
 const en = {
   "tagline": "Learn anything, one small step at a time.",
   "devLogin": "Log in as Dev",

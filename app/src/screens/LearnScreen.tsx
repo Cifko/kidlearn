@@ -3,11 +3,11 @@ import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { api, ApiError, AnswerResult, Lesson } from '../api';
-import { useLang } from '../i18n';
+import { Lang, useLang } from '../i18n';
 import { MathText, stripMathForMeasure } from '../math';
 import { Owl } from '../owl';
 import { PlotView } from '../plot';
-import { resolveSpeechLanguage, SpeechLang, stripMathForSpeech } from '../tex';
+import { resolveSpeechLanguage, stripMathForSpeech } from '../tex';
 import { OPTION_INNER, optionFontSize } from '../text-fit';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
@@ -95,7 +95,7 @@ export function LearnScreen({
     });
   }, []);
 
-  const speakQuestion = useCallback((text: string, ttsLang: string, mathLang: SpeechLang) => {
+  const speakQuestion = useCallback((text: string, ttsLang: string, mathLang: Lang) => {
     Speech.stop();
     Speech.speak(stripMathForSpeech(text, mathLang), { language: ttsLang, rate: 0.95 });
   }, []);

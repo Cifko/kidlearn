@@ -1,4 +1,6 @@
 import type { Lang } from './i18n';
+import { LANGUAGES } from './languages';
+import { FRAC_WORD, MATH_WORDS, POWER_WORD, SUB_WORD } from './math-words';
 
 // Pure text utilities: no React Native imports, so this module is runnable
 // in plain node for testing.
@@ -36,105 +38,20 @@ export function stripMathForMeasure(input: string): string {
     .join('');
 }
 
-export type SpeechLang = 'en' | 'sk';
-
-// TeX commands the narrator speaks as words. Digits, letters and symbols
-// (+, -, =, parentheses) pass through: the TTS voice reads those in its
-// own language.
-const MATH_WORDS: Record<SpeechLang, Record<string, string>> = {
-  en: {
-    lim: 'limit',
-    log: 'log',
-    ln: 'ln',
-    sin: 'sine',
-    cos: 'cosine',
-    tan: 'tangent',
-    exp: 'exp',
-    sqrt: 'square root of',
-    sum: 'sum',
-    int: 'integral',
-    infty: 'infinity',
-    pi: 'pi',
-    alpha: 'alpha',
-    beta: 'beta',
-    gamma: 'gamma',
-    delta: 'delta',
-    theta: 'theta',
-    lambda: 'lambda',
-    mu: 'mu',
-    sigma: 'sigma',
-    phi: 'phi',
-    omega: 'omega',
-    to: 'to',
-    approx: 'approximately',
-    neq: 'not equal to',
-    ne: 'not equal to',
-    leq: 'less than or equal to',
-    le: 'less than or equal to',
-    geq: 'greater than or equal to',
-    ge: 'greater than or equal to',
-    times: 'times',
-    cdot: 'times',
-    div: 'divided by',
-    pm: 'plus or minus',
-    left: '',
-    right: '',
-  },
-  sk: {
-    lim: 'limita',
-    log: 'logaritmus',
-    ln: 'ln',
-    sin: 'sínus',
-    cos: 'kosínus',
-    tan: 'tangens',
-    exp: 'exponenciála',
-    sqrt: 'odmocnina z',
-    sum: 'suma',
-    int: 'integrál',
-    infty: 'nekonečno',
-    pi: 'pí',
-    alpha: 'alfa',
-    beta: 'beta',
-    gamma: 'gama',
-    delta: 'delta',
-    theta: 'téta',
-    lambda: 'lambda',
-    mu: 'mí',
-    sigma: 'sigma',
-    phi: 'fí',
-    omega: 'omega',
-    to: 'sa blíži k',
-    approx: 'približne',
-    neq: 'nerovná sa',
-    ne: 'nerovná sa',
-    leq: 'menšie alebo rovné',
-    le: 'menšie alebo rovné',
-    geq: 'väčšie alebo rovné',
-    ge: 'väčšie alebo rovné',
-    times: 'krát',
-    cdot: 'krát',
-    div: 'deleno',
-    pm: 'plus alebo mínus',
-    left: '',
-    right: '',
-  },
-};
-
-const FRAC_WORD: Record<SpeechLang, string> = { en: 'over', sk: 'lomeno' };
-const POWER_WORD: Record<SpeechLang, string> = { en: 'to the power', sk: 'na' };
-const SUB_WORD: Record<SpeechLang, string> = { en: 'sub', sk: 's indexom' };
-
 function commandPattern(cmd: string): RegExp {
   // A command ends where letters end: \ne must not match inside \neq.
+  // Double backslash: the regex must see a literal backslash first.
   return new RegExp(`\\\\${cmd}(?![a-zA-Z])`, 'g');
 }
 
-const MATH_RES: Record<SpeechLang, [RegExp, string][]> = {
-  en: Object.entries(MATH_WORDS.en).map(([cmd, word]) => [commandPattern(cmd), ` ${word} `]),
-  sk: Object.entries(MATH_WORDS.sk).map(([cmd, word]) => [commandPattern(cmd), ` ${word} `]),
-};
+const MATH_RES = {} as Record<Lang, [RegExp, string][]>;
+for (const { code } of LANGUAGES) {
+  MATH_RES[code] = Object.entries(MATH_WORDS[code]).map(
+    ([cmd, word]) => [commandPattern(cmd), ` ${word} `] as [RegExp, string],
+  );
+}
 
-function texToSpeech(tex: string, lang: SpeechLang): string {
+function texToSpeech(tex: string, lang: Lang): string {
   const fracWord = FRAC_WORD[lang];
   let s = ` ${tex} `;
   // A limit's subscript is read inline ("limit x approaches 0"), not as "sub".
@@ -160,7 +77,7 @@ function texToSpeech(tex: string, lang: SpeechLang): string {
 }
 
 /** Question text with math spans converted to speakable words. */
-export function stripMathForSpeech(input: string, lang: SpeechLang): string {
+export function stripMathForSpeech(input: string, lang: Lang): string {
   return splitMathSpans(input)
     .map((span) => (span.kind === 'math' ? texToSpeech(span.tex, lang) : span.text))
     .join('')
@@ -172,22 +89,25 @@ export interface SpeechSetup {
   /** BCP-47 code for the TTS voice. */
   tts: string;
   /** Language of the spoken math connector words. */
-  math: SpeechLang;
+  math: Lang;
 }
 
-/** Narration follows the subject content language, not the UI language. */
+/**
+ * Narration follows the subject content language. Every app language is
+ * equal here: voice tag and math words both come from the tables, and
+ * only unknown codes fall back to English.
+ */
 export function resolveSpeechLanguage(subjectLang: string, uiLang: Lang): SpeechSetup {
   const code = subjectLang.trim().toLowerCase();
-  if (code.startsWith('sk')) {
-    return { tts: 'sk-SK', math: 'sk' };
-  }
-  if (code.startsWith('en')) {
-    return { tts: 'en-US', math: 'en' };
+  const match = LANGUAGES.find((entry) => entry.code === code);
+  if (match) {
+    return { tts: match.tts, math: match.code };
   }
   if (code === '') {
-    return uiLang === 'sk' ? { tts: 'sk-SK', math: 'sk' } : { tts: 'en-US', math: 'en' };
+    const ui = LANGUAGES.find((entry) => entry.code === uiLang);
+    return { tts: ui?.tts ?? 'en-US', math: uiLang };
   }
   // Unknown content language: let the platform try the raw code, with
-  // math words in the UI language.
-  return { tts: subjectLang.trim(), math: uiLang === 'sk' ? 'sk' : 'en' };
+  // English math words.
+  return { tts: code, math: 'en' };
 }
