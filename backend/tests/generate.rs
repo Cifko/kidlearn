@@ -556,3 +556,78 @@ async fn generate_records_errors() {
     assert!(calls[0]["error"].as_str().unwrap().contains("unreachable"));
     assert!(calls[0]["response"].is_null());
 }
+
+async fn create_subject_body(app: &axum::Router, token: &str, body: serde_json::Value) -> i64 {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/subjects")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    json["id"].as_i64().unwrap()
+}
+
+/// Chain A -> B -> C: generating C feeds both ancestors' lesson plans
+/// (direct and transitive) into the plan and questions prompts.
+#[tokio::test]
+async fn generate_includes_transitive_prerequisite_context() {
+    let (url, _server) = mock_lesson_backend(LESSON_FIXTURE).await;
+    let mut config = Config::for_tests();
+    config.meta_api_key = Some("test-key".to_string());
+    config.meta_api_base = url;
+    let pool = db::init_pool(&config.database_url).await.unwrap();
+    let app = create_app(AppState::new(pool.clone(), config));
+    let token = login_token(&app).await;
+
+    let a = create_subject_body(&app, &token, json!({ "title": "WW2" })).await;
+    sqlx::query("INSERT INTO lessons (subject_id, position, title, summary) VALUES (?, 1, 'Causes', 'names the main causes')")
+        .bind(a)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let b = create_subject_body(
+        &app,
+        &token,
+        json!({ "title": "WW2 battles", "prerequisite_ids": [a] }),
+    )
+    .await;
+    sqlx::query("INSERT INTO lessons (subject_id, position, title, summary) VALUES (?, 1, 'Stalingrad', 'describes the turning point')")
+        .bind(b)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let c = create_subject_body(
+        &app,
+        &token,
+        json!({ "title": "WW2 advanced", "prerequisite_ids": [b] }),
+    )
+    .await;
+
+    start_mock_generation(&app, &token, c).await;
+    let detail = wait_until_settled(&app, &token, c).await;
+    assert_eq!(detail["status"], "ready");
+
+    let plans = list_calls(&app, &token, "?kind=plan").await;
+    let prompt = plans[0]["prompt"].as_str().unwrap();
+    // Direct prerequisite first, then the transitive one.
+    let battles = prompt.find("WW2 battles").unwrap();
+    let ww2 = prompt.find("Prior subject \"WW2\"").unwrap();
+    assert!(battles < ww2);
+    assert!(prompt.contains("Stalingrad"));
+    assert!(prompt.contains("Causes"));
+
+    let questions = list_calls(&app, &token, "?kind=questions").await;
+    let prompt = questions[0]["prompt"].as_str().unwrap();
+    assert!(prompt.contains("Stalingrad"));
+    assert!(prompt.contains("Causes"));
+}

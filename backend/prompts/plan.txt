@@ -5,6 +5,7 @@ SUBJECT = {subject}
 AUDIENCE = {audience}
 LANGUAGE = {language}
 COUNT = {count}
+PRIOR SUBJECTS = {prerequisites}
 
 TASK:
 Propose COUNT lessons that break SUBJECT into small learnable steps for the student.
@@ -24,6 +25,9 @@ SUBJECT ALIGNMENT (no drift):
    BAD summary: "Explores numbers in a playful way."
    GOOD summary: "Counts objects from 1 to 20 without skipping."
 9. Each title must signal that same skill, so reading only the titles shows the full path through SUBJECT.
+
+PRIOR KNOWLEDGE (build, don't repeat):
+10. PRIOR SUBJECTS lists earlier subjects (with their lesson plans) when this subject continues them, or None. When listed: plan the natural next step — deeper or later material a student of those subjects has not seen yet. Never re-plan a lesson they already cover; every new lesson must teach something new.
 
 OUTPUT SCHEMA:
 {

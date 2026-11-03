@@ -17,7 +17,7 @@ use crate::{
     auth::AuthUser,
     error::AppError,
     meta::{CallContext, MetaClient},
-    models::{PlotSpec, Subject},
+    models::{Lesson, PlotSpec, Subject},
     prompts,
     subjects::{subject_detail, SubjectDetail},
     AppState,
@@ -205,10 +205,132 @@ struct LessonJob {
     language: String,
     grade: Option<i64>,
     modality: String,
+    prerequisites: String,
     position: i64,
     item: PlanItem,
     min_questions: i64,
     max_questions: i64,
+}
+
+/// Prompt budget for prerequisite context. Lesson summaries already name
+/// concrete skills, so titles + summaries map the prior coverage without
+/// pasting every question.
+const PREREQ_BUDGET: usize = 6000;
+/// How many link hops back the context reaches.
+const PREREQ_DEPTH: usize = 4;
+
+fn clip(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_string();
+    }
+    let mut out: String = text.chars().take(max).collect();
+    out.push('…');
+    out
+}
+
+/// Transitive prerequisite context for the prompts: titles, descriptions
+/// and lesson plans of every ancestor subject, nearest first. Only
+/// subjects visible to the generator (own or public) are included.
+/// "None" when there is nothing to build on.
+async fn prerequisite_context(
+    pool: &sqlx::SqlitePool,
+    user_id: i64,
+    subject_id: i64,
+) -> Result<String, AppError> {
+    let links: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT subject_id, prerequisite_id FROM subject_prerequisites")
+            .fetch_all(pool)
+            .await?;
+    let mut children: std::collections::HashMap<i64, Vec<i64>> = std::collections::HashMap::new();
+    for (from, to) in links {
+        children.entry(from).or_default().push(to);
+    }
+    let mut visited = HashSet::new();
+    visited.insert(subject_id);
+    let mut order = Vec::new();
+    let mut frontier = vec![subject_id];
+    for _ in 0..PREREQ_DEPTH {
+        let mut next = Vec::new();
+        for id in frontier {
+            if let Some(prereqs) = children.get(&id) {
+                for prereq in prereqs {
+                    if visited.insert(*prereq) {
+                        order.push(*prereq);
+                        next.push(*prereq);
+                    }
+                }
+            }
+        }
+        if next.is_empty() {
+            break;
+        }
+        frontier = next;
+    }
+    if order.is_empty() {
+        return Ok("None".to_string());
+    }
+    let placeholders = order.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let subject_sql = format!(
+        "SELECT id, owner_id, title, description, language, visibility, status, lesson_count, tags_json, grade, modality, created_at
+         FROM subjects WHERE id IN ({placeholders}) AND (visibility = 'public' OR owner_id = ?)"
+    );
+    let mut select = sqlx::query_as::<_, Subject>(&subject_sql);
+    for id in &order {
+        select = select.bind(id);
+    }
+    let subjects: Vec<Subject> = select.bind(user_id).fetch_all(pool).await?;
+    let by_id: std::collections::HashMap<i64, &Subject> = subjects
+        .iter()
+        .map(|subject| (subject.id, subject))
+        .collect();
+    let lesson_sql = format!(
+        "SELECT id, subject_id, position, title, summary FROM lessons
+         WHERE subject_id IN ({placeholders}) ORDER BY subject_id, position"
+    );
+    let mut lesson_select = sqlx::query_as::<_, Lesson>(&lesson_sql);
+    for id in &order {
+        lesson_select = lesson_select.bind(id);
+    }
+    let lessons: Vec<Lesson> = lesson_select.fetch_all(pool).await?;
+    let mut lessons_by_subject: std::collections::HashMap<i64, Vec<&Lesson>> =
+        std::collections::HashMap::new();
+    for lesson in &lessons {
+        lessons_by_subject
+            .entry(lesson.subject_id)
+            .or_default()
+            .push(lesson);
+    }
+    let mut blocks = Vec::new();
+    let mut used = 0;
+    for id in order {
+        let Some(subject) = by_id.get(&id) else {
+            continue;
+        };
+        let mut block = format!(
+            "Prior subject \"{}\": {}",
+            subject.title,
+            clip(subject.description.trim(), 300)
+        );
+        if let Some(lessons) = lessons_by_subject.get(&id) {
+            for lesson in lessons {
+                block.push_str(&format!(
+                    "\n  Lesson {}: {} — {}",
+                    lesson.position,
+                    clip(lesson.title.trim(), 120),
+                    clip(lesson.summary.trim(), 200)
+                ));
+            }
+        }
+        if used + block.len() > PREREQ_BUDGET {
+            break;
+        }
+        used += block.len();
+        blocks.push(block);
+    }
+    if blocks.is_empty() {
+        return Ok("None".to_string());
+    }
+    Ok(blocks.join("\n\n"))
 }
 
 async fn run_lessons(
@@ -224,6 +346,10 @@ async fn run_lessons(
     } else {
         format!("{} ({})", subject.title, subject.description.trim())
     };
+    let prerequisites = prerequisite_context(pool, subject.owner_id, subject.id).await?;
+    if prerequisites != "None" {
+        tracing::info!(chars = prerequisites.len(), "prerequisite context attached");
+    }
 
     let ctx = CallContext {
         kind: "plan",
@@ -234,7 +360,13 @@ async fn run_lessons(
     let plan: PlanResponse = client
         .chat_json(
             &ctx,
-            &prompts::render_plan(&topic, &subject.language, count, subject.grade),
+            &prompts::render_plan(
+                &topic,
+                &subject.language,
+                count,
+                subject.grade,
+                &prerequisites,
+            ),
             0.7,
         )
         .await?;
@@ -276,6 +408,7 @@ async fn run_lessons(
             language: subject.language.clone(),
             grade: subject.grade,
             modality: subject.modality.clone(),
+            prerequisites: prerequisites.clone(),
             position,
             item,
             min_questions,
@@ -336,6 +469,7 @@ async fn generate_one_lesson(job: LessonJob) -> Result<(), AppError> {
                 job.max_questions,
                 job.grade,
                 &job.modality,
+                &job.prerequisites,
             ),
             0.7,
         )

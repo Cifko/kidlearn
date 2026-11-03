@@ -52,13 +52,22 @@ fn language_name(code: &str) -> String {
     format!("{name} ({code})")
 }
 
-pub fn render_plan(subject: &str, language: &str, count: i64, grade: Option<i64>) -> String {
+pub fn render_plan(
+    subject: &str,
+    language: &str,
+    count: i64,
+    grade: Option<i64>,
+    prerequisites: &str,
+) -> String {
     PLAN.replace("{subject}", subject)
         .replace("{audience}", audience_label(grade))
         .replace("{language}", &language_name(language))
         .replace("{count}", &count.to_string())
+        .replace("{prerequisites}", prerequisites)
 }
 
+/// One positional arg per prompt placeholder, like render_plan.
+#[allow(clippy::too_many_arguments)]
 pub fn render_questions(
     subject: &str,
     lesson: &str,
@@ -67,6 +76,7 @@ pub fn render_questions(
     max_questions: i64,
     grade: Option<i64>,
     modality: &str,
+    prerequisites: &str,
 ) -> String {
     let modality = match modality {
         "text_only" => "text only",
@@ -80,6 +90,7 @@ pub fn render_questions(
         .replace("{language}", &language_name(language))
         .replace("{min_questions}", &min_questions.to_string())
         .replace("{max_questions}", &max_questions.to_string())
+        .replace("{prerequisites}", prerequisites)
 }
 
 pub fn render_image(asset_json: &str) -> String {
@@ -106,45 +117,69 @@ mod tests {
 
     #[test]
     fn plan_prompt_fills_all_placeholders() {
-        let prompt = render_plan("prvouka", "sk", 20, Some(2));
+        let prompt = render_plan("prvouka", "sk", 20, Some(2), "None");
         assert!(prompt.contains("prvouka"));
         assert!(prompt.contains("MUST be written in Slovak (sk)"));
         assert!(prompt.contains("COUNT = 20"));
         assert!(prompt.contains("AUDIENCE = a young child (grade 1-2, early reader)"));
+        assert!(prompt.contains("PRIOR SUBJECTS = None"));
         assert!(!prompt.contains("{subject}"));
         assert!(!prompt.contains("{audience}"));
         assert!(!prompt.contains("{language}"));
         assert!(!prompt.contains("{count}"));
+        assert!(!prompt.contains("{prerequisites}"));
 
-        let prompt = render_plan("analysis", "en", 20, Some(5));
+        let prompt = render_plan("analysis", "en", 20, Some(5), "None");
         assert!(prompt.contains("older student (high school, university, or adult)"));
     }
 
     #[test]
     fn questions_prompt_fills_all_placeholders() {
-        let prompt = render_questions("math", "addition", "en", 5, 10, Some(2), "auto");
+        let prompt = render_questions("math", "addition", "en", 5, 10, Some(2), "auto", "None");
         assert!(prompt.contains("addition"));
         assert!(prompt.contains("MIN_QUESTIONS = 5"));
         assert!(prompt.contains("MAX_QUESTIONS = 10"));
         assert!(prompt.contains("AUDIENCE = a young child (grade 1-2, early reader)"));
         assert!(prompt.contains("MODALITY = auto"));
+        assert!(prompt.contains("PRIOR SUBJECTS = None"));
         assert!(!prompt.contains("{lesson}"));
         assert!(!prompt.contains("{audience}"));
         assert!(!prompt.contains("{modality}"));
         assert!(!prompt.contains("{min_questions}"));
         assert!(!prompt.contains("{max_questions}"));
+        assert!(!prompt.contains("{prerequisites}"));
 
-        let prompt = render_questions("math", "addition", "en", 5, 10, None, "text_only");
+        let prompt = render_questions("math", "addition", "en", 5, 10, None, "text_only", "None");
         assert!(prompt.contains("AUDIENCE = a general student of unknown age"));
         assert!(prompt.contains("MODALITY = text only"));
     }
 
     #[test]
+    fn prerequisite_context_reaches_both_prompts() {
+        let context = "Prior subject \"WW2\": basics\n  Lesson 1: Causes — names the causes";
+        let plan = render_plan("WW2 advanced", "en", 20, None, context);
+        assert!(plan.contains(context));
+        assert!(plan.contains("build, don't repeat"));
+        let questions = render_questions(
+            "WW2 advanced",
+            "Blitzkrieg",
+            "en",
+            5,
+            10,
+            None,
+            "auto",
+            context,
+        );
+        assert!(questions.contains(context));
+        assert!(questions.contains("not mandatory"));
+    }
+
+    #[test]
     fn alignment_rules_survive_prompt_edits() {
-        let plan = render_plan("math", "en", 20, None);
+        let plan = render_plan("math", "en", 20, None, "None");
         assert!(plan.contains("tangential"));
         assert!(plan.contains("checkable skill"));
-        let questions = render_questions("math", "addition", "en", 5, 10, None, "auto");
+        let questions = render_questions("math", "addition", "en", 5, 10, None, "auto", "None");
         assert!(questions.contains("differ ONLY in the tested attribute"));
         assert!(questions.contains("FORBIDDEN"));
         assert!(questions.contains("\"focus\""));

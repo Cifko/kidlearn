@@ -46,6 +46,7 @@ async fn database_schema_creates_all_tables() {
             "progress",
             "questions",
             "stats",
+            "subject_prerequisites",
             "subjects",
             "users"
         ]
