@@ -42,7 +42,12 @@ function texToSvg(source: string): RenderedMath | null {
     // <svg> as root. As a nested svg, its ex-unit width/height gets
     // truncated to a few points on native (parseInt("4.023ex") === 4),
     // clipping the formula to a sliver. Web only worked by CSS luck.
-    const svg = /<svg[\s\S]*<\/svg>/.exec(wrapped)?.[0] ?? wrapped;
+    const raw = /<svg[\s\S]*<\/svg>/.exec(wrapped)?.[0] ?? wrapped;
+    // MathJax annotates nodes with data-mml-node/data-c/data-mjx-texclass:
+    // the SVG parser camelCases those to dataMmlNode etc., which React DOM
+    // rejects with a warning on every formula. They carry no visual info,
+    // so strip all data-* attributes.
+    const svg = raw.replace(/\sdata-[a-zA-Z-]+="[^"]*"/g, '');
     // MathJax renders errors as red text instead of throwing.
     if (!svg.includes('merror')) {
       const width = /width="([\d.]+)ex"/.exec(svg);
