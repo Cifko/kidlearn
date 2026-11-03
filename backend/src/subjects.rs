@@ -98,6 +98,7 @@ pub struct CreateSubject {
     pub tags: Option<Vec<String>>,
     pub grade: Option<i64>,
     pub modality: Option<String>,
+    pub prerequisite_ids: Option<Vec<i64>>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -109,11 +110,18 @@ pub struct LessonWithCount {
     pub question_count: i64,
 }
 
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct PrerequisiteRef {
+    pub id: i64,
+    pub title: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SubjectDetail {
     #[serde(flatten)]
     pub subject: SubjectSummary,
     pub lessons: Vec<LessonWithCount>,
+    pub prerequisites: Vec<PrerequisiteRef>,
 }
 
 const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visibility, c.status,
@@ -314,6 +322,8 @@ async fn create_subject(
             ));
         }
     };
+    let prerequisite_ids = normalize_prerequisites(input.prerequisite_ids.unwrap_or_default())?;
+    check_prerequisites_visible(&state.db, auth.0.id, &prerequisite_ids).await?;
 
     let (id,): (i64,) = sqlx::query_as(
         "INSERT INTO subjects (owner_id, title, description, language, visibility, status, lesson_count, tags_json, grade, modality)
@@ -330,6 +340,16 @@ async fn create_subject(
     .bind(modality)
     .fetch_one(&state.db)
     .await?;
+
+    for prerequisite_id in &prerequisite_ids {
+        sqlx::query(
+            "INSERT INTO subject_prerequisites (subject_id, prerequisite_id) VALUES (?, ?)",
+        )
+        .bind(id)
+        .bind(prerequisite_id)
+        .execute(&state.db)
+        .await?;
+    }
 
     let row = sqlx::query_as::<_, SubjectRow>(&format!("SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2"))
         .bind(auth.0.id)
@@ -373,7 +393,20 @@ pub async fn subject_detail(
     .fetch_all(pool)
     .await?;
 
-    Ok(SubjectDetail { subject, lessons })
+    let prerequisites = sqlx::query_as::<_, PrerequisiteRef>(
+        "SELECT s.id, s.title FROM subject_prerequisites p
+         JOIN subjects s ON s.id = p.prerequisite_id
+         WHERE p.subject_id = ? ORDER BY p.rowid",
+    )
+    .bind(subject_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(SubjectDetail {
+        subject,
+        lessons,
+        prerequisites,
+    })
 }
 
 async fn subject_summary(
@@ -390,6 +423,54 @@ async fn subject_summary(
     .await?
     .ok_or_else(|| AppError::NotFound("subject not found".to_string()))?;
     Ok(SubjectSummary::from(row))
+}
+
+/// Dedupes and validates prerequisite links: at most 8.
+/// Links are set at creation only, so cycles are impossible: a new subject
+/// has no incoming edges yet.
+fn normalize_prerequisites(ids: Vec<i64>) -> Result<Vec<i64>, AppError> {
+    if ids.len() > 8 {
+        return Err(AppError::BadRequest(
+            "at most 8 prerequisites allowed".to_string(),
+        ));
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for id in ids {
+        if seen.insert(id) {
+            out.push(id);
+        }
+    }
+    Ok(out)
+}
+
+/// Every prerequisite must exist and be visible to the creator (own or
+/// public). Unknown and hidden ids fail alike, so private subjects of
+/// others cannot be probed or leak into AI context.
+async fn check_prerequisites_visible(
+    pool: &sqlx::SqlitePool,
+    user_id: i64,
+    ids: &[i64],
+) -> Result<(), AppError> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT COUNT(*) AS count FROM subjects
+         WHERE id IN ({placeholders}) AND (visibility = 'public' OR owner_id = ?)"
+    );
+    let mut select = sqlx::query_scalar::<_, i64>(&sql);
+    for id in ids {
+        select = select.bind(id);
+    }
+    let found: i64 = select.bind(user_id).fetch_one(pool).await?;
+    if found as usize != ids.len() {
+        return Err(AppError::BadRequest(
+            "a prerequisite subject was not found".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// Lowercases, dedupes and validates tags: at most 8, each 1-24 chars.
@@ -488,6 +569,12 @@ async fn delete_subject(
         ));
     }
     sqlx::query("DELETE FROM subjects WHERE id = ?")
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+    // Explicit even with ON DELETE CASCADE: links both ways must go.
+    sqlx::query("DELETE FROM subject_prerequisites WHERE subject_id = ? OR prerequisite_id = ?")
+        .bind(id)
         .bind(id)
         .execute(&state.db)
         .await?;

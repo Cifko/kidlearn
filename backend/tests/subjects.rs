@@ -825,3 +825,145 @@ async fn published_subjects_cannot_regenerate_or_delete() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
+
+async fn login_token_as(app: &axum::Router, who: &str) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/auth/dev-login")
+                .header("content-type", "application/json")
+                .body(Body::from(format!(r#"{{"who":"{who}"}}"#)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    json["token"].as_str().unwrap().to_string()
+}
+
+async fn get_detail(app: &axum::Router, token: &str, id: i64) -> serde_json::Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/subjects/{id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .unwrap();
+    serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn create_with_prerequisites_shows_them_on_detail() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let (_, base) = create_subject(&app, &token, json!({ "title": "WW2" })).await;
+    let base_id = base["id"].as_i64().unwrap();
+
+    let (status, advanced) = create_subject(
+        &app,
+        &token,
+        json!({ "title": "WW2 advanced", "prerequisite_ids": [base_id, base_id] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let advanced_id = advanced["id"].as_i64().unwrap();
+
+    // Detail of the based subject lists the prerequisite once (deduped).
+    let detail = get_detail(&app, &token, advanced_id).await;
+    assert_eq!(detail["title"], "WW2 advanced");
+    assert_eq!(detail["prerequisites"].as_array().unwrap().len(), 1);
+    assert_eq!(detail["prerequisites"][0]["id"], base_id);
+    assert_eq!(detail["prerequisites"][0]["title"], "WW2");
+}
+
+#[tokio::test]
+async fn create_rejects_unknown_and_hidden_prerequisites() {
+    let (_pool, app) = test_state().await;
+    let mine = login_token(&app).await;
+    let other = login_token_as(&app, "dev2").await;
+    let (_, hidden) = create_subject(&app, &other, json!({ "title": "Hidden" })).await;
+    let hidden_id = hidden["id"].as_i64().unwrap();
+
+    // Someone else's private subject: same rejection as a missing id.
+    let (status, _) = create_subject(
+        &app,
+        &mine,
+        json!({ "title": "Based", "prerequisite_ids": [hidden_id] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = create_subject(
+        &app,
+        &mine,
+        json!({ "title": "Based", "prerequisite_ids": [999999] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Once public, the same subject links fine.
+    let (status, _) = publish(&app, &other, hidden_id).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = create_subject(
+        &app,
+        &mine,
+        json!({ "title": "Based", "prerequisite_ids": [hidden_id] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+}
+
+#[tokio::test]
+async fn create_rejects_too_many_prerequisites() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let ids: Vec<i64> = (1..=9).collect();
+    let (status, _) = create_subject(
+        &app,
+        &token,
+        json!({ "title": "Based", "prerequisite_ids": ids }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn delete_removes_prerequisite_links() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let (_, base) = create_subject(&app, &token, json!({ "title": "Base" })).await;
+    let base_id = base["id"].as_i64().unwrap();
+    let (_, based) = create_subject(
+        &app,
+        &token,
+        json!({ "title": "Based", "prerequisite_ids": [base_id] }),
+    )
+    .await;
+    let based_id = based["id"].as_i64().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::delete(format!("/subjects/{base_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let detail = get_detail(&app, &token, based_id).await;
+    assert_eq!(detail["prerequisites"].as_array().unwrap().len(), 0);
+}

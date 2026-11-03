@@ -93,6 +93,11 @@ const SCHEMA: &[&str] = &[
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )",
     "CREATE INDEX IF NOT EXISTS idx_llm_calls_user ON llm_calls (user_id, id DESC)",
+    "CREATE TABLE IF NOT EXISTS subject_prerequisites (
+        subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        prerequisite_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        PRIMARY KEY (subject_id, prerequisite_id)
+    )",
 ];
 
 /// ALTERs for databases created before the matching column existed.
