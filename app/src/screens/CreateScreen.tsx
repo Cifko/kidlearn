@@ -25,43 +25,10 @@ export function CreateScreen({
   const [grade, setGrade] = useState<'any' | '1' | '2' | '3' | '4' | '5'>('any');
   const [modality, setModality] = useState<'auto' | 'text_only'>('auto');
   const [count, setCount] = useState(20);
-  const [prereqQuery, setPrereqQuery] = useState('');
-  const [prereqResults, setPrereqResults] = useState<SubjectSummary[]>([]);
-  const [prereqBusy, setPrereqBusy] = useState(false);
-  const [prereqs, setPrereqs] = useState<SubjectSummary[]>(basedOn ? [basedOn] : []);
   const [phase, setPhase] = useState<Phase>('editing');
   const [error, setError] = useState<string | null>(null);
 
   const busy = phase !== 'editing';
-
-  async function handlePrereqSearch() {
-    const needle = prereqQuery.trim();
-    if (needle.length === 0 || prereqs.length >= 8) {
-      return;
-    }
-    setPrereqBusy(true);
-    try {
-      // Only published subjects are immutable enough to build on.
-      const found = await api.listSubjects(token, needle, lang, 'public');
-      setPrereqResults(found.filter((hit) => !prereqs.some((p) => p.id === hit.id)).slice(0, 8));
-    } catch {
-      setPrereqResults([]);
-    } finally {
-      setPrereqBusy(false);
-    }
-  }
-
-  function handlePrereqAdd(hit: SubjectSummary) {
-    if (prereqs.length >= 8 || prereqs.some((p) => p.id === hit.id)) {
-      return;
-    }
-    setPrereqs([...prereqs, hit]);
-    setPrereqResults(prereqResults.filter((other) => other.id !== hit.id));
-  }
-
-  function handlePrereqRemove(id: number) {
-    setPrereqs(prereqs.filter((p) => p.id !== id));
-  }
 
   async function handleSubmit() {
     if (title.trim().length === 0) {
@@ -82,7 +49,7 @@ export function CreateScreen({
         tags,
         grade: grade === 'any' ? null : Number(grade),
         modality,
-        prerequisite_ids: prereqs.map((p) => p.id),
+        prerequisite_ids: basedOn ? [basedOn.id] : [],
       });
       setPhase('generating');
       // The content language travels with the request so lessons come back
@@ -101,6 +68,13 @@ export function CreateScreen({
         <Text style={styles.back}>← {t('back')}</Text>
       </TouchableOpacity>
       <Text style={styles.heading}>{t('newSubject')}</Text>
+      {basedOn && (
+        <View style={styles.basedOnBox}>
+          <Text style={styles.basedOnText}>
+            {t('basedOn')}: {basedOn.title}
+          </Text>
+        </View>
+      )}
       {error && <ErrorBox message={error} />}
       <Field label={t('title')}>
         <TextInput
@@ -159,55 +133,6 @@ export function CreateScreen({
       <Field label={t('lessons')}>
         <Stepper value={count} min={1} max={50} onChange={setCount} />
       </Field>
-      <Field label={t('basedOn')}>
-        {prereqs.length > 0 && (
-          <View style={styles.chips}>
-            {prereqs.map((p) => (
-              <TouchableOpacity
-                key={p.id}
-                style={styles.chip}
-                onPress={() => handlePrereqRemove(p.id)}
-                disabled={busy}
-              >
-                <Text style={styles.chipText}>{p.title} ×</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        {prereqs.length < 8 && (
-          <View style={styles.searchRow}>
-            <TextInput
-              style={[styles.input, styles.searchInput]}
-              value={prereqQuery}
-              onChangeText={setPrereqQuery}
-              onSubmitEditing={handlePrereqSearch}
-              placeholder={t('search')}
-              returnKeyType="search"
-              editable={!busy && !prereqBusy}
-            />
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={handlePrereqSearch}
-              disabled={busy || prereqBusy}
-            >
-              <Text style={styles.searchButtonText}>{t('search')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {prereqResults.map((hit) => (
-          <TouchableOpacity
-            key={hit.id}
-            style={styles.hit}
-            onPress={() => handlePrereqAdd(hit)}
-            disabled={busy}
-          >
-            <Text style={styles.hitTitle}>{hit.title}</Text>
-            <Text style={styles.hitMeta}>
-              {hit.owner_name} · ID {hit.id} · {hit.lesson_count}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </Field>
       <View style={styles.submit}>
         <ChunkyButton
           title={t('createGenerate')}
@@ -247,60 +172,17 @@ const styles = StyleSheet.create({
     minHeight: 88,
     textAlignVertical: 'top',
   },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  chip: {
+  basedOnBox: {
     backgroundColor: '#DDF4FF',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  chipText: {
-    color: colors.blueDark,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  searchRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-  },
-  searchButton: {
-    backgroundColor: colors.blueDark,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-  },
-  searchButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  hit: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.border,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginTop: 8,
+    marginBottom: 16,
   },
-  hitTitle: {
-    fontSize: 16,
+  basedOnText: {
+    color: colors.blueDark,
+    fontSize: 15,
     fontWeight: '800',
-    color: colors.ink,
-  },
-  hitMeta: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.muted,
-    marginTop: 2,
   },
   submit: {
     marginTop: 8,
