@@ -3,6 +3,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, ApiError, SubjectSummary, Stats, User } from '../api';
 import { useLang } from '../i18n';
+import { contentLanguageLabel } from '../languages';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen, Segmented } from '../ui';
 
@@ -134,7 +135,7 @@ export function HomeScreen({
             </Text>
           </View>
           <Text style={styles.cardMeta}>
-            {subject.language.toUpperCase()} ·{' '}
+            {contentLanguageLabel(subject.language)} ·{' '}
             {subject.visibility === 'public' ? t('public') : t('private')} ·{' '}
             {subject.lesson_count} · ★ {subject.like_count}
           </Text>

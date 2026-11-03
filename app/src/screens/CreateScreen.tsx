@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { api, ApiError } from '../api';
-import { Lang, useLang } from '../i18n';
+import { useLang } from '../i18n';
+import { CONTENT_LANGUAGES } from '../languages';
 import { colors } from '../theme';
-import { ChunkyButton, ErrorBox, Field, Screen, Segmented, Stepper } from '../ui';
+import { ChunkyButton, Dropdown, ErrorBox, Field, Screen, Segmented, Stepper } from '../ui';
 
 type Phase = 'editing' | 'creating' | 'generating';
 
@@ -20,7 +21,7 @@ export function CreateScreen({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tagsText, setTagsText] = useState('');
-  const [contentLang, setContentLang] = useState<Lang>(lang);
+  const [contentLang, setContentLang] = useState<string>(lang);
   const [grade, setGrade] = useState<'any' | '1' | '2' | '3' | '4' | '5'>('any');
   const [modality, setModality] = useState<'auto' | 'text_only'>('auto');
   const [count, setCount] = useState(20);
@@ -50,7 +51,7 @@ export function CreateScreen({
         modality,
       });
       setPhase('generating');
-      // The UI language travels with the request so lessons come back
+      // The content language travels with the request so lessons come back
       // in the language the child actually reads.
       await api.generateSubject(token, created.id, count);
       onDone(created.id);
@@ -98,11 +99,8 @@ export function CreateScreen({
         />
       </Field>
       <Field label={t('language')}>
-        <Segmented<Lang>
-          options={[
-            { value: 'en', label: 'English' },
-            { value: 'sk', label: 'Slovenčina' },
-          ]}
+        <Dropdown
+          options={CONTENT_LANGUAGES.map((entry) => ({ value: entry.code, label: entry.label }))}
           value={contentLang}
           onChange={setContentLang}
         />

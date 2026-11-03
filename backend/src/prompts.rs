@@ -13,10 +13,49 @@ fn audience_label(grade: Option<i64>) -> &'static str {
     }
 }
 
+/// Full language name for the prompts, so the model gets "Czech (cs)"
+/// instead of a bare code. Unknown codes pass through untouched.
+/// Keep in sync with CONTENT_LANGUAGES in app/src/languages.ts.
+fn language_name(code: &str) -> String {
+    let code = code.trim();
+    let name = match code.to_lowercase().as_str() {
+        "en" => "English",
+        "sk" => "Slovak",
+        "ar" => "Arabic",
+        "bg" => "Bulgarian",
+        "cs" => "Czech",
+        "da" => "Danish",
+        "de" => "German",
+        "el" => "Greek",
+        "es" => "Spanish",
+        "fi" => "Finnish",
+        "fr" => "French",
+        "hi" => "Hindi",
+        "hr" => "Croatian",
+        "hu" => "Hungarian",
+        "it" => "Italian",
+        "ja" => "Japanese",
+        "nl" => "Dutch",
+        "no" => "Norwegian",
+        "pl" => "Polish",
+        "pt" => "Portuguese",
+        "ro" => "Romanian",
+        "ru" => "Russian",
+        "sl" => "Slovenian",
+        "sr" => "Serbian",
+        "sv" => "Swedish",
+        "tr" => "Turkish",
+        "uk" => "Ukrainian",
+        "zh" => "Chinese",
+        _ => return code.to_string(),
+    };
+    format!("{name} ({code})")
+}
+
 pub fn render_plan(subject: &str, language: &str, count: i64, grade: Option<i64>) -> String {
     PLAN.replace("{subject}", subject)
         .replace("{audience}", audience_label(grade))
-        .replace("{language}", language)
+        .replace("{language}", &language_name(language))
         .replace("{count}", &count.to_string())
 }
 
@@ -38,7 +77,7 @@ pub fn render_questions(
         .replace("{lesson}", lesson)
         .replace("{audience}", audience_label(grade))
         .replace("{modality}", modality)
-        .replace("{language}", language)
+        .replace("{language}", &language_name(language))
         .replace("{min_questions}", &min_questions.to_string())
         .replace("{max_questions}", &max_questions.to_string())
 }
@@ -59,10 +98,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn language_names_expand_known_codes() {
+        assert_eq!(language_name("cs"), "Czech (cs)");
+        assert_eq!(language_name("sk"), "Slovak (sk)");
+        assert_eq!(language_name("xx"), "xx");
+    }
+
+    #[test]
     fn plan_prompt_fills_all_placeholders() {
         let prompt = render_plan("prvouka", "sk", 20, Some(2));
         assert!(prompt.contains("prvouka"));
-        assert!(prompt.contains("MUST be written in sk"));
+        assert!(prompt.contains("MUST be written in Slovak (sk)"));
         assert!(prompt.contains("COUNT = 20"));
         assert!(prompt.contains("AUDIENCE = a young child (grade 1-2, early reader)"));
         assert!(!prompt.contains("{subject}"));

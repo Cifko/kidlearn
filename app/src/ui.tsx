@@ -1,6 +1,7 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -86,6 +87,66 @@ export function Segmented<T extends string>({
         );
       })}
     </View>
+  );
+}
+
+export function Dropdown<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.value === value);
+  return (
+    <>
+      <TouchableOpacity onPress={() => setOpen(true)} style={styles.dropdownButton}>
+        <Text style={styles.dropdownButtonText}>{selected?.label ?? value}</Text>
+        <Text style={styles.dropdownCaret}>▾</Text>
+      </TouchableOpacity>
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
+        <View style={styles.dropdownBackdrop}>
+          {/* Sibling, not parent, of the sheet: taps on rows must not close it. */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setOpen(false)}
+          />
+          <View style={styles.dropdownSheet}>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {options.map((option) => {
+                const active = option.value === value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    onPress={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                    }}
+                    style={[styles.dropdownRow, active && styles.dropdownRowActive]}
+                  >
+                    <Text
+                      style={[styles.dropdownRowText, active && styles.dropdownRowTextActive]}
+                    >
+                      {option.label}
+                    </Text>
+                    {active && <Text style={styles.dropdownCheck}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -192,6 +253,61 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   segmentTextActive: {
+    color: colors.blue,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    color: colors.ink,
+  },
+  dropdownCaret: {
+    fontSize: 16,
+    color: colors.muted,
+  },
+  dropdownBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  dropdownSheet: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    maxHeight: 420,
+    paddingVertical: 8,
+  },
+  dropdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  dropdownRowActive: {
+    backgroundColor: '#EEF6FF',
+  },
+  dropdownRowText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  dropdownRowTextActive: {
+    fontWeight: '800',
+    color: colors.blueDark,
+  },
+  dropdownCheck: {
+    fontSize: 16,
+    fontWeight: '800',
     color: colors.blue,
   },
   stepper: {

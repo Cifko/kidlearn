@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { api, ApiError, SubjectDetail, LessonProgress } from '../api';
 import { useLang } from '../i18n';
+import { contentLanguageLabel } from '../languages';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
 
@@ -140,7 +141,7 @@ export function DetailScreen({
         <>
           <Text style={styles.heading}>{detail.title}</Text>
           <Text style={styles.meta}>
-            {detail.owner_name} · {detail.language.toUpperCase()} ·{' '}
+            {detail.owner_name} · {contentLanguageLabel(detail.language)} ·{' '}
             {detail.visibility === 'public' ? t('public') : t('private')}
             {detail.grade != null && ` · ${t('grade')} ${detail.grade === 5 ? '5+' : detail.grade}`}
             {detail.modality === 'text_only' && ` · ${t('picturesTextOnly')}`}
