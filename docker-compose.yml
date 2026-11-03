@@ -1,0 +1,28 @@
+# KidLearn backend for NAS / home server.
+#
+#   1. cp backend/.env.example backend/.env and fill in the secrets
+#      (at least JWT_SECRET; META_API_KEY for generation).
+#   2. docker compose up -d --build
+#   3. Backend listens on http://<nas>:8001
+#      Point the app at it: EXPO_PUBLIC_API_URL=http://<nas-ip>:8001
+#
+# Data lives in the kidlearn-data volume and survives updates.
+# Prompts are compiled into the image: rebuild after editing them.
+services:
+  backend:
+    build: ./backend
+    image: kidlearn-backend
+    ports:
+      - "8001:3000"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Wins over backend/.env: inside the container the database must
+      # live on the /data volume, not on a relative dev path.
+      DATABASE_URL: sqlite:///data/kidlearn.db?mode=rwc
+    volumes:
+      - kidlearn-data:/data
+    restart: unless-stopped
+
+volumes:
+  kidlearn-data:

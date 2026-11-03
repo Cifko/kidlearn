@@ -92,6 +92,26 @@ App (phone): install Expo Go, run `npx expo start`, scan the QR code.
    dev login keeps working. Like Google, phone login needs a dev build
    (OAuth redirects don't work in Expo Go).
 
+## Running on a NAS (Docker)
+
+The backend ships as a container; the database lives in a Docker volume
+so updates never lose data.
+
+1. `cp backend/.env.example backend/.env` and fill in the secrets (at
+   least `JWT_SECRET`; `META_API_KEY` for generation, OAuth IDs for
+   social login).
+2. `docker compose up -d --build`
+3. The API listens on `http://<nas>:8001`. Point the app at it:
+   `EXPO_PUBLIC_API_URL=http://<nas-ip>:8001` in `app/.env`.
+
+Notes:
+
+- AI prompts are compiled into the image: after editing
+  `backend/prompts/*.txt`, rebuild (`docker compose up -d --build`).
+- To update: `git pull` then `docker compose up -d --build`.
+- To seed the NAS with an existing database, stop the container and
+  copy your `kidlearn.db*` files into the `kidlearn-data` volume.
+
 ## Roadmap
 
 - Durable job queue for generation (in-process tasks are lost on restart)
