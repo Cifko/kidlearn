@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
@@ -7,7 +7,7 @@ import { Lang, useLang } from '../i18n';
 import { MathText, stripMathForMeasure } from '../math';
 import { Owl } from '../owl';
 import { PlotView } from '../plot';
-import { resolveSpeechLanguage, stripMathForSpeech } from '../tex';
+import { pickNarratorVoice, resolveSpeechLanguage, stripMathForSpeech } from '../tex';
 import { OPTION_INNER, optionFontSize } from '../text-fit';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
@@ -28,6 +28,8 @@ export function LearnScreen({
   const { t, lang } = useLang();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [narratorEnabled, setNarratorEnabled] = useState(true);
+  const [voices, setVoices] = useState<Speech.Voice[]>([]);
+  const [voicesLoaded, setVoicesLoaded] = useState(false);
   const [images, setImages] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [fetchingImages, setFetchingImages] = useState(false);
@@ -95,10 +97,24 @@ export function LearnScreen({
     });
   }, []);
 
-  const speakQuestion = useCallback((text: string, ttsLang: string, mathLang: Lang) => {
-    Speech.stop();
-    Speech.speak(stripMathForSpeech(text, mathLang), { language: ttsLang, rate: 0.95 });
+  useEffect(() => {
+    Speech.getAvailableVoicesAsync()
+      .then((list) => setVoices(list))
+      .catch(() => {})
+      .finally(() => setVoicesLoaded(true));
   }, []);
+
+  const speakQuestion = useCallback(
+    (text: string, ttsLang: string, mathLang: Lang, voiceId: string | null) => {
+      Speech.stop();
+      Speech.speak(stripMathForSpeech(text, mathLang), {
+        language: ttsLang,
+        rate: 0.95,
+        ...(voiceId ? { voice: voiceId } : {}),
+      });
+    },
+    [],
+  );
 
   function resetRun() {
     setIndex(0);
@@ -173,6 +189,13 @@ export function LearnScreen({
   // Primitives, so the effect below only re-runs when they really change.
   const ttsLang = speech?.tts ?? null;
   const mathLang = speech?.math ?? null;
+  const narratorVoice = useMemo(
+    () => (ttsLang ? pickNarratorVoice(voices, ttsLang) : null),
+    [voices, ttsLang],
+  );
+  const narratorVoiceId = narratorVoice?.identifier ?? null;
+  const showVoiceWarning =
+    narratorEnabled && ttsLang !== null && voicesLoaded && narratorVoice === null;
 
   // The narrator reads each question aloud; moving on (or leaving) stops it.
   useEffect(() => {
@@ -182,11 +205,11 @@ export function LearnScreen({
       }
       return;
     }
-    speakQuestion(questionText, ttsLang, mathLang);
+    speakQuestion(questionText, ttsLang, mathLang, narratorVoiceId);
     return () => {
       Speech.stop();
     };
-  }, [narratorEnabled, questionText, ttsLang, mathLang, speakQuestion]);
+  }, [narratorEnabled, questionText, ttsLang, mathLang, narratorVoiceId, speakQuestion]);
 
   async function toggleNarrator() {
     const next = !narratorEnabled;
@@ -204,7 +227,7 @@ export function LearnScreen({
       AsyncStorage.setItem('kidlearn.narrator', '1');
       return;
     }
-    speakQuestion(questionText, ttsLang, mathLang);
+    speakQuestion(questionText, ttsLang, mathLang, narratorVoiceId);
   }
 
   return (
@@ -277,6 +300,7 @@ export function LearnScreen({
               />
             </View>
           </View>
+          {showVoiceWarning && <Text style={styles.voiceWarning}>{t('noVoice')}</Text>}
           {current?.plot != null && (
             <PlotView
               plot={current.plot}
@@ -442,6 +466,12 @@ const styles = StyleSheet.create({
   },
   questionBody: {
     flex: 1,
+  },
+  voiceWarning: {
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: -8,
+    marginBottom: 16,
   },
   options: {
     flexDirection: 'row',

@@ -92,6 +92,54 @@ export interface SpeechSetup {
   math: Lang;
 }
 
+export interface NarratorVoiceOption {
+  identifier: string;
+  name: string;
+  language: string;
+}
+
+/**
+ * Best device voice for a TTS tag, or null when the device has none.
+ * Prefers Google voices (consistently good on desktop Chrome) and exact
+ * tag matches; avoids robotic engines. Letting the platform choose
+ * instead often lands on the worst option (e.g. eSpeak, or an English
+ * voice reading Czech).
+ */
+export function pickNarratorVoice(
+  voices: NarratorVoiceOption[],
+  ttsTag: string,
+): NarratorVoiceOption | null {
+  const tag = ttsTag.toLowerCase().replace(/_/g, '-');
+  const base = tag.split('-')[0];
+  if (base === '') {
+    return null;
+  }
+  let best: NarratorVoiceOption | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const voice of voices) {
+    const lang = voice.language.toLowerCase().replace(/_/g, '-');
+    if (lang.split('-')[0] !== base) {
+      continue;
+    }
+    let score = 0;
+    if (lang === tag) {
+      score += 4;
+    }
+    const name = voice.name.toLowerCase();
+    if (name.startsWith('google')) {
+      score += 2;
+    }
+    if (name.includes('espeak')) {
+      score -= 5;
+    }
+    if (score > bestScore) {
+      best = voice;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 /**
  * Narration follows the subject content language. Every app language is
  * equal here: voice tag and math words both come from the tables, and
