@@ -130,6 +130,7 @@ const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visib
 #[derive(Debug, Default, Deserialize)]
 struct ListQuery {
     q: Option<String>,
+    lang: Option<String>,
 }
 
 async fn list_subjects(
@@ -138,18 +139,27 @@ async fn list_subjects(
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<SubjectSummary>>, AppError> {
     let needle = query.q.unwrap_or_default().trim().to_string();
+    let lang = query.lang.unwrap_or_default().trim().to_string();
     let mut sql =
         format!("SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)");
+    let mut param = 2;
     if !needle.is_empty() {
-        sql.push_str(
-            " AND (c.title LIKE ?2 ESCAPE '\\' OR c.description LIKE ?2 ESCAPE '\\'
-             OR c.tags_json LIKE ?2 ESCAPE '\\')",
-        );
+        sql.push_str(&format!(
+            " AND (c.title LIKE ?{param} ESCAPE '\\' OR c.description LIKE ?{param} ESCAPE '\\'
+             OR c.tags_json LIKE ?{param} ESCAPE '\\')"
+        ));
+        param += 1;
+    }
+    if !lang.is_empty() {
+        sql.push_str(&format!(" AND c.language = ?{param}"));
     }
     sql.push_str(" ORDER BY c.id DESC");
     let mut select = sqlx::query_as::<_, SubjectRow>(&sql).bind(auth.0.id);
     if !needle.is_empty() {
         select = select.bind(format!("%{}%", escape_like(&needle)));
+    }
+    if !lang.is_empty() {
+        select = select.bind(lang);
     }
     let rows: Vec<SubjectRow> = select.fetch_all(&state.db).await?;
     Ok(Json(rows.into_iter().map(SubjectSummary::from).collect()))
@@ -166,6 +176,7 @@ fn escape_like(needle: &str) -> String {
 struct AiSearchQuery {
     q: Option<String>,
     max_results: Option<i64>,
+    lang: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -202,13 +213,18 @@ async fn ai_search(
             )
         })?;
 
-    let rows = sqlx::query_as::<_, SubjectRow>(&format!(
-        "SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)
-         ORDER BY c.id DESC LIMIT 50"
-    ))
-    .bind(auth.0.id)
-    .fetch_all(&state.db)
-    .await?;
+    let lang = query.lang.unwrap_or_default().trim().to_string();
+    let mut sql =
+        format!("SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)");
+    if !lang.is_empty() {
+        sql.push_str(" AND c.language = ?2");
+    }
+    sql.push_str(" ORDER BY c.id DESC LIMIT 50");
+    let mut select = sqlx::query_as::<_, SubjectRow>(&sql).bind(auth.0.id);
+    if !lang.is_empty() {
+        select = select.bind(lang);
+    }
+    let rows: Vec<SubjectRow> = select.fetch_all(&state.db).await?;
     if rows.is_empty() {
         return Ok(Json(Vec::new()));
     }

@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { api, ApiError } from '../api';
 import { useLang } from '../i18n';
-import { CONTENT_LANGUAGES } from '../languages';
 import { colors } from '../theme';
-import { ChunkyButton, Dropdown, ErrorBox, Field, Screen, Segmented, Stepper } from '../ui';
+import { ChunkyButton, ErrorBox, Field, Screen, Segmented, Stepper } from '../ui';
 
 type Phase = 'editing' | 'creating' | 'generating';
 
@@ -21,7 +20,6 @@ export function CreateScreen({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tagsText, setTagsText] = useState('');
-  const [contentLang, setContentLang] = useState<string>(lang);
   const [grade, setGrade] = useState<'any' | '1' | '2' | '3' | '4' | '5'>('any');
   const [modality, setModality] = useState<'auto' | 'text_only'>('auto');
   const [count, setCount] = useState(20);
@@ -44,7 +42,7 @@ export function CreateScreen({
       const created = await api.createSubject(token, {
         title: title.trim(),
         description: description.trim(),
-        language: contentLang,
+        language: lang,
         lesson_count: count,
         tags,
         grade: grade === 'any' ? null : Number(grade),
@@ -96,13 +94,6 @@ export function CreateScreen({
           onChangeText={setTagsText}
           editable={!busy}
           maxLength={200}
-        />
-      </Field>
-      <Field label={t('language')}>
-        <Dropdown
-          options={CONTENT_LANGUAGES.map((entry) => ({ value: entry.code, label: entry.label }))}
-          value={contentLang}
-          onChange={setContentLang}
         />
       </Field>
       <Field label={t('grade')}>

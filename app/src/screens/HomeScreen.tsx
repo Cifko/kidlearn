@@ -3,9 +3,9 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, ApiError, SubjectSummary, Stats, User } from '../api';
 import { useLang } from '../i18n';
-import { contentLanguageLabel } from '../languages';
+import { LANGUAGES, languageLabel } from '../languages';
 import { colors } from '../theme';
-import { ChunkyButton, ErrorBox, Screen, Segmented } from '../ui';
+import { ChunkyButton, Dropdown, ErrorBox, Screen } from '../ui';
 
 export function HomeScreen({
   token,
@@ -35,7 +35,7 @@ export function HomeScreen({
       setError(null);
       try {
         const [list, userStats] = await Promise.all([
-          api.listSubjects(token, q.trim() || undefined),
+          api.listSubjects(token, q.trim() || undefined, lang),
           api.stats(token),
         ]);
         setSubjects(list);
@@ -46,7 +46,7 @@ export function HomeScreen({
         setLoading(false);
       }
     },
-    [token],
+    [token, lang],
   );
 
   const loadAi = useCallback(
@@ -58,14 +58,14 @@ export function HomeScreen({
       setLoading(true);
       setError(null);
       try {
-        setSubjects(await api.aiSearch(token, needle));
+        setSubjects(await api.aiSearch(token, needle, lang));
       } catch (err) {
         setError(err instanceof ApiError ? err.message : 'Failed to load');
       } finally {
         setLoading(false);
       }
     },
-    [token],
+    [token, lang],
   );
 
   useEffect(() => {
@@ -96,11 +96,8 @@ export function HomeScreen({
         </View>
       </View>
       <View style={styles.langBox}>
-        <Segmented
-          options={[
-            { value: 'en', label: 'EN' },
-            { value: 'sk', label: 'SK' },
-          ]}
+        <Dropdown
+          options={LANGUAGES.map((entry) => ({ value: entry.code, label: entry.label }))}
           value={lang}
           onChange={setLang}
         />
@@ -135,7 +132,7 @@ export function HomeScreen({
             </Text>
           </View>
           <Text style={styles.cardMeta}>
-            {contentLanguageLabel(subject.language)} ·{' '}
+            {languageLabel(subject.language)} ·{' '}
             {subject.visibility === 'public' ? t('public') : t('private')} ·{' '}
             {subject.lesson_count} · ★ {subject.like_count}
           </Text>

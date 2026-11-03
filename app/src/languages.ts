@@ -1,14 +1,10 @@
-export interface ContentLanguage {
-  code: string;
-  label: string;
-}
-
 /**
- * Quiz content languages: the AI generates in any of these. Labels are
- * native names, so they need no UI translation. When adding a code here,
- * add its English name to `language_name` in backend/src/prompts.rs too.
+ * App languages: one selection drives the UI, quiz generation, subject
+ * filtering and narration. Labels are native names. When adding a code
+ * here, add its English name to `language_name` in backend/src/prompts.rs
+ * and a UI string table in src/i18n.tsx too.
  */
-export const CONTENT_LANGUAGES: ContentLanguage[] = [
+export const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'sk', label: 'Slovenčina' },
   { code: 'ar', label: 'العربية' },
@@ -37,9 +33,9 @@ export const CONTENT_LANGUAGES: ContentLanguage[] = [
   { code: 'tr', label: 'Türkçe' },
   { code: 'uk', label: 'Українська' },
   { code: 'zh', label: '中文' },
-];
+] as const;
 
-/** Native label for a content code, falling back to the bare code. */
-export function contentLanguageLabel(code: string): string {
-  return CONTENT_LANGUAGES.find((entry) => entry.code === code)?.label ?? code.toUpperCase();
+/** Native label for a language code, falling back to the bare code. */
+export function languageLabel(code: string): string {
+  return LANGUAGES.find((entry) => entry.code === code)?.label ?? code.toUpperCase();
 }

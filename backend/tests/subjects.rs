@@ -89,6 +89,63 @@ async fn create_and_list_own_subject() {
 }
 
 #[tokio::test]
+async fn list_filters_by_language() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    create_subject(&app, &token, json!({ "title": "Math", "language": "en" })).await;
+    create_subject(
+        &app,
+        &token,
+        json!({ "title": "Prvouka", "language": "sk" }),
+    )
+    .await;
+
+    for (query, expected) in [
+        ("/subjects?lang=sk", "Prvouka"),
+        ("/subjects?lang=en", "Math"),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get(query)
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 8192)
+            .await
+            .unwrap();
+        let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let titles: Vec<&str> = list
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["title"].as_str().unwrap())
+            .collect();
+        assert_eq!(titles, vec![expected]);
+    }
+
+    // Search and language combine.
+    let response = app
+        .oneshot(
+            Request::get("/subjects?q=prvouka&lang=en")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(list.as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn create_validates_input() {
     let (_pool, app) = test_state().await;
     let token = login_token(&app).await;

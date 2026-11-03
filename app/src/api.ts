@@ -182,11 +182,17 @@ export const api = {
       body: { id_token: idToken },
     }),
   me: (token: string) => request<User>('/me', { token }),
-  listSubjects: (token: string, q?: string) =>
-    request<SubjectSummary[]>(
-      q ? `/subjects?q=${encodeURIComponent(q)}` : '/subjects',
-      { token },
-    ),
+  listSubjects: (token: string, q?: string, lang?: string) => {
+    const search = new URLSearchParams();
+    if (q) {
+      search.set('q', q);
+    }
+    if (lang) {
+      search.set('lang', lang);
+    }
+    const query = search.toString();
+    return request<SubjectSummary[]>(`/subjects${query ? `?${query}` : ''}`, { token });
+  },
   createSubject: (token: string, input: CreateSubjectInput) =>
     request<SubjectSummary>('/subjects', { method: 'POST', token, body: input }),
   getSubject: (token: string, id: number) =>
@@ -219,8 +225,13 @@ export const api = {
   subjectProgress: (token: string, id: number) =>
     request<SubjectProgress>(`/subjects/${id}/progress`, { token }),
   stats: (token: string) => request<Stats>('/stats', { token }),
-  aiSearch: (token: string, q: string) =>
-    request<SubjectSummary[]>(`/subjects/ai-search?q=${encodeURIComponent(q)}`, { token }),
+  aiSearch: (token: string, q: string, lang?: string) => {
+    const search = new URLSearchParams({ q });
+    if (lang) {
+      search.set('lang', lang);
+    }
+    return request<SubjectSummary[]>(`/subjects/ai-search?${search.toString()}`, { token });
+  },
   listLlmCalls: (token: string, params?: { subject_id?: number; kind?: string }) => {
     const search = new URLSearchParams();
     if (params?.subject_id !== undefined) {

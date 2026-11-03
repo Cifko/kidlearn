@@ -6,7 +6,8 @@ import * as WebBrowser from 'expo-web-browser';
 import { api, ApiError } from '../api';
 import { useLang } from '../i18n';
 import { colors } from '../theme';
-import { ChunkyButton, ErrorBox, Screen, Segmented } from '../ui';
+import { LANGUAGES } from '../languages';
+import { ChunkyButton, Dropdown, ErrorBox, Screen } from '../ui';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -69,11 +70,8 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
     <Screen>
       <View style={styles.langRow}>
         <View style={styles.langBox}>
-          <Segmented
-            options={[
-              { value: 'en', label: 'EN' },
-              { value: 'sk', label: 'SK' },
-            ]}
+          <Dropdown
+            options={LANGUAGES.map((entry) => ({ value: entry.code, label: entry.label }))}
             value={lang}
             onChange={setLang}
           />
@@ -116,7 +114,7 @@ const styles = StyleSheet.create({
     marginBottom: 48,
   },
   langBox: {
-    width: 160,
+    width: 200,
   },
   title: {
     fontSize: 44,

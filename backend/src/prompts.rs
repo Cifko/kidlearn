@@ -15,7 +15,7 @@ fn audience_label(grade: Option<i64>) -> &'static str {
 
 /// Full language name for the prompts, so the model gets "Czech (cs)"
 /// instead of a bare code. Unknown codes pass through untouched.
-/// Keep in sync with CONTENT_LANGUAGES in app/src/languages.ts.
+/// Keep in sync with LANGUAGES in app/src/languages.ts.
 fn language_name(code: &str) -> String {
     let code = code.trim();
     let name = match code.to_lowercase().as_str() {
