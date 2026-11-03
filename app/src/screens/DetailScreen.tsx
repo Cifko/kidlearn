@@ -1,5 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ScrollViewInstance,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { api, ApiError, SubjectDetail, LessonProgress } from '../api';
 import { useLang } from '../i18n';
 import { languageLabel } from '../languages';
@@ -9,12 +15,14 @@ import { ChunkyButton, ErrorBox, Screen } from '../ui';
 export function DetailScreen({
   token,
   subjectId,
+  focusLessonId,
   onBack,
   onDeleted,
   onLearn,
 }: {
   token: string;
   subjectId: number;
+  focusLessonId?: number;
   onBack: () => void;
   onDeleted: () => void;
   onLearn: (lessonId: number) => void;
@@ -28,6 +36,13 @@ export function DetailScreen({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingPublish, setConfirmingPublish] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const listY = useRef(0);
+  const listMeasured = useRef(false);
+  const rowLayouts = useRef<Record<number, { y: number; height: number }>>({});
+  const viewportHeight = useRef<number | null>(null);
+  const scrolledFor = useRef<number | null>(null);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(
     async (quiet = false) => {
@@ -64,6 +79,69 @@ export function DetailScreen({
     const timer = setInterval(() => load(true), 3000);
     return () => clearInterval(timer);
   }, [detail?.status, load]);
+
+  // Returning from a lesson lands back where the student was: a finished
+  // lesson goes to the top with the next one below it (or the next one on
+  // top when it would not fit); an unfinished one simply goes to the top.
+  // Fires once per arrival: polls must never yank the scroll position.
+  const maybeScrollToFocus = useCallback(() => {
+    if (focusLessonId == null || scrolledFor.current === focusLessonId) {
+      return;
+    }
+    if (!detail) {
+      return;
+    }
+    const index = detail.lessons.findIndex((sub) => sub.id === focusLessonId);
+    if (index < 0) {
+      return;
+    }
+    // Only scroll on complete measurements: scrolling while content is
+    // still growing clamps to a short-lived max and sticks there.
+    if (viewportHeight.current == null || !listMeasured.current) {
+      return;
+    }
+    if (Object.keys(rowLayouts.current).length < detail.lessons.length) {
+      return;
+    }
+    const focus = rowLayouts.current[focusLessonId];
+    if (!focus) {
+      return;
+    }
+    const focusY = listY.current + focus.y;
+    let y = focusY;
+    const prog = progress[focusLessonId];
+    const done = prog !== undefined && prog.total > 0 && prog.answered >= prog.total;
+    const next = detail.lessons[index + 1];
+    const viewport = viewportHeight.current;
+    if (done && next && viewport != null) {
+      const nextLayout = rowLayouts.current[next.id];
+      if (nextLayout && listY.current + nextLayout.y + nextLayout.height > focusY + viewport) {
+        y = listY.current + nextLayout.y;
+      }
+    }
+    scrolledFor.current = focusLessonId;
+    if (scrollTimer.current) {
+      clearTimeout(scrollTimer.current);
+    }
+    // One beat for the layout flush (e.g. buttons below the list) to
+    // settle, so the offset is never clamped by a half-grown content.
+    scrollTimer.current = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y, animated: false });
+    }, 50);
+  }, [detail, focusLessonId, progress]);
+
+  useEffect(() => {
+    maybeScrollToFocus();
+  }, [maybeScrollToFocus]);
+
+  useEffect(
+    () => () => {
+      if (scrollTimer.current) {
+        clearTimeout(scrollTimer.current);
+      }
+    },
+    [],
+  );
 
   async function handleRegenerate() {
     if (!detail) {
@@ -131,7 +209,13 @@ export function DetailScreen({
   }
 
   return (
-    <Screen>
+    <Screen
+      scrollRef={scrollRef}
+      onViewportHeight={(height) => {
+        viewportHeight.current = height;
+        maybeScrollToFocus();
+      }}
+    >
       <TouchableOpacity onPress={onBack}>
         <Text style={styles.back}>← {t('back')}</Text>
       </TouchableOpacity>
@@ -176,7 +260,14 @@ export function DetailScreen({
           ) : (
             <Text style={styles.likeCount}>★ {detail.like_count}</Text>
           )}
-          <View style={styles.list}>
+          <View
+            style={styles.list}
+            onLayout={(event) => {
+              listY.current = event.nativeEvent.layout.y;
+              listMeasured.current = true;
+              maybeScrollToFocus();
+            }}
+          >
             {detail.lessons.map((sub) => {
               const prog = progress[sub.id];
               const locked = prog ? !prog.unlocked : false;
@@ -198,6 +289,11 @@ export function DetailScreen({
                   style={[styles.subRow, !learnable && styles.subRowLocked]}
                   disabled={!learnable}
                   onPress={() => onLearn(sub.id)}
+                  onLayout={(event) => {
+                    const { y, height } = event.nativeEvent.layout;
+                    rowLayouts.current[sub.id] = { y, height };
+                    maybeScrollToFocus();
+                  }}
                 >
                   <Text style={[styles.subPosition, !learnable && styles.subPositionLocked]}>
                     {sub.position}

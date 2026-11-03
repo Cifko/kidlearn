@@ -4,6 +4,7 @@ import {
   Modal,
   SafeAreaView,
   ScrollView,
+  ScrollViewInstance,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,11 +13,28 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { colors } from './theme';
 
-export function Screen({ children }: { children: ReactNode }) {
+export function Screen({
+  children,
+  scrollRef,
+  onViewportHeight,
+}: {
+  children: ReactNode;
+  scrollRef?: React.Ref<ScrollViewInstance>;
+  onViewportHeight?: (height: number) => void;
+}) {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        onLayout={
+          onViewportHeight
+            ? (event) => onViewportHeight(event.nativeEvent.layout.height)
+            : undefined
+        }
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         {children}
       </ScrollView>
     </SafeAreaView>

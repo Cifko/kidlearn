@@ -23,7 +23,7 @@ export function LearnScreen({
 }: {
   token: string;
   lessonId: number;
-  onExit: () => void;
+  onExit: (lessonId: number) => void;
 }) {
   const { t, lang } = useLang();
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -210,7 +210,7 @@ export function LearnScreen({
   return (
     <Screen>
       <View style={styles.topRow}>
-        <TouchableOpacity onPress={onExit}>
+        <TouchableOpacity onPress={() => onExit(lessonId)}>
           <Text style={styles.exit}>✕</Text>
         </TouchableOpacity>
         <View style={styles.track}>
@@ -235,7 +235,7 @@ export function LearnScreen({
         <>
           <Text style={styles.muted}>{t('emptyLesson')}</Text>
           <View style={styles.exitButton}>
-            <ChunkyButton title={t('exit')} onPress={onExit} color="gray" />
+            <ChunkyButton title={t('exit')} onPress={() => onExit(lessonId)} color="gray" />
           </View>
         </>
       )}
@@ -251,12 +251,12 @@ export function LearnScreen({
             {failed ? (
               <ChunkyButton title={t('tryAgain')} onPress={resetRun} color="blue" />
             ) : (
-              <ChunkyButton title={t('exit')} onPress={onExit} />
+              <ChunkyButton title={t('exit')} onPress={() => onExit(lessonId)} />
             )}
           </View>
           {failed && (
             <View style={styles.exitButton}>
-              <ChunkyButton title={t('exit')} onPress={onExit} color="gray" />
+              <ChunkyButton title={t('exit')} onPress={() => onExit(lessonId)} color="gray" />
             </View>
           )}
         </>
