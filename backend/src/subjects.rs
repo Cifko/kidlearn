@@ -151,10 +151,14 @@ async fn list_subjects(
     let needle = query.q.unwrap_or_default().trim().to_string();
     let lang = query.lang.unwrap_or_default().trim().to_string();
     let visibility = query.visibility.unwrap_or_default().trim().to_string();
+    let id_query = parse_id_query(&needle);
     let mut sql =
         format!("SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)");
     let mut param = 2;
-    if !needle.is_empty() {
+    if let Some(id) = id_query {
+        sql.push_str(&format!(" AND c.id = ?{param}"));
+        param += 1;
+    } else if !needle.is_empty() {
         sql.push_str(&format!(
             " AND (c.title LIKE ?{param} ESCAPE '\\' OR c.description LIKE ?{param} ESCAPE '\\'
              OR c.tags_json LIKE ?{param} ESCAPE '\\')"
@@ -170,7 +174,9 @@ async fn list_subjects(
     }
     sql.push_str(" ORDER BY c.id DESC");
     let mut select = sqlx::query_as::<_, SubjectRow>(&sql).bind(auth.0.id);
-    if !needle.is_empty() {
+    if let Some(id) = id_query {
+        select = select.bind(id);
+    } else if !needle.is_empty() {
         select = select.bind(format!("%{}%", escape_like(&needle)));
     }
     if !lang.is_empty() {
@@ -181,6 +187,18 @@ async fn list_subjects(
     }
     let rows: Vec<SubjectRow> = select.fetch_all(&state.db).await?;
     Ok(Json(rows.into_iter().map(SubjectSummary::from).collect()))
+}
+
+/// Queries like `id:3` bypass text search and fetch that exact subject.
+/// Case-insensitive, tolerates spaces (`ID: 3`). Anything else (including
+/// a non-numeric `id:abc`) falls through to normal text search.
+fn parse_id_query(needle: &str) -> Option<i64> {
+    let trimmed = needle.trim();
+    let prefix = trimmed.get(..3)?;
+    if !prefix.eq_ignore_ascii_case("id:") {
+        return None;
+    }
+    trimmed.get(3..)?.trim().parse::<i64>().ok()
 }
 
 fn escape_like(needle: &str) -> String {
@@ -223,6 +241,25 @@ async fn ai_search(
     if needle.is_empty() {
         return Err(AppError::BadRequest("q is required".to_string()));
     }
+    let lang = query.lang.unwrap_or_default().trim().to_string();
+    // Exact id lookup skips the model entirely: no ranking call, works
+    // even without an API key.
+    if let Some(id) = parse_id_query(&needle) {
+        let mut sql = format!(
+            "SELECT {SUMMARY_COLUMNS} WHERE c.id = ?2 AND (c.visibility = 'public' OR c.owner_id = ?1)"
+        );
+        if !lang.is_empty() {
+            sql.push_str(" AND c.language = ?3");
+        }
+        let mut select = sqlx::query_as::<_, SubjectRow>(&sql)
+            .bind(auth.0.id)
+            .bind(id);
+        if !lang.is_empty() {
+            select = select.bind(lang);
+        }
+        let rows: Vec<SubjectRow> = select.fetch_all(&state.db).await?;
+        return Ok(Json(rows.into_iter().map(SubjectSummary::from).collect()));
+    }
     let client = MetaClient::from_config(&state.config)
         .map(|client| client.with_recorder(state.db.clone(), auth.0.id))
         .ok_or_else(|| {
@@ -231,7 +268,6 @@ async fn ai_search(
             )
         })?;
 
-    let lang = query.lang.unwrap_or_default().trim().to_string();
     let mut sql =
         format!("SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)");
     if !lang.is_empty() {

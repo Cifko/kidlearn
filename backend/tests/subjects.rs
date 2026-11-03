@@ -960,6 +960,94 @@ async fn create_rejects_unknown_hidden_and_private_prerequisites() {
 }
 
 #[tokio::test]
+async fn search_id_query_returns_only_exact_subject() {
+    let (_pool, app) = test_state().await;
+    let mine = login_token(&app).await;
+    let other = login_token_as(&app, "dev2").await;
+    let (_, first) = create_subject(&app, &mine, json!({ "title": "Alpha" })).await;
+    let first_id = first["id"].as_i64().unwrap();
+    let (_, second) = create_subject(&app, &mine, json!({ "title": "Beta" })).await;
+    let second_id = second["id"].as_i64().unwrap();
+    let (_, hidden) = create_subject(&app, &other, json!({ "title": "Hidden" })).await;
+    let hidden_id = hidden["id"].as_i64().unwrap();
+    let (_, slovak) =
+        create_subject(&app, &mine, json!({ "title": "Prvouka", "language": "sk" })).await;
+    let slovak_id = slovak["id"].as_i64().unwrap();
+
+    // Exact match only: no text search mixed in.
+    let list = list_with(&app, &mine, &format!("?q=id:{second_id}")).await;
+    let list = list.as_array().unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0]["title"], "Beta");
+
+    // Case-insensitive, tolerates a space.
+    let list = list_with(&app, &mine, &format!("?q=ID:+{first_id}")).await;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["title"], "Alpha");
+
+    // Unknown id, someone else's private subject: nothing.
+    let list = list_with(&app, &mine, "?q=id:999999").await;
+    assert_eq!(list.as_array().unwrap().len(), 0);
+    let list = list_with(&app, &mine, &format!("?q=id:{hidden_id}")).await;
+    assert_eq!(list.as_array().unwrap().len(), 0);
+
+    // Non-numeric id falls back to text search (matches nothing here).
+    let list = list_with(&app, &mine, "?q=id:abc").await;
+    assert_eq!(list.as_array().unwrap().len(), 0);
+
+    // The language filter still applies to exact lookups.
+    let list = list_with(&app, &mine, &format!("?q=id:{slovak_id}&lang=en")).await;
+    assert_eq!(list.as_array().unwrap().len(), 0);
+    let list = list_with(&app, &mine, &format!("?q=id:{slovak_id}&lang=sk")).await;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn ai_search_id_query_skips_model() {
+    // No API key configured: an exact id lookup must still work, proving
+    // no model call happens on this path.
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let (_, created) = create_subject(&app, &token, json!({ "title": "Alpha" })).await;
+    let id = created["id"].as_i64().unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/subjects/ai-search?q=id:{id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["title"], "Alpha");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/subjects/ai-search?q=id:999999")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(list.as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
 async fn list_filters_by_visibility() {
     let (_pool, app) = test_state().await;
     let token = login_token(&app).await;
