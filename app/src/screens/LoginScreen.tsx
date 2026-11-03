@@ -12,6 +12,15 @@ import { ChunkyButton, Dropdown, ErrorBox, Screen } from '../ui';
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '';
+const FB_APP_ID = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID ?? '';
+
+// Facebook has no OIDC discovery document: static endpoints. The code is
+// exchanged server-side (the app secret never leaves the backend), so the
+// token endpoint below is only here to satisfy the request shape.
+const FB_DISCOVERY = {
+  authorizationEndpoint: 'https://www.facebook.com/v22.0/dialog/oauth',
+  tokenEndpoint: 'https://graph.facebook.com/v22.0/oauth/access_token',
+};
 
 export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => void }) {
   const { lang, setLang, t } = useLang();
@@ -27,6 +36,16 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
       redirectUri: AuthSession.makeRedirectUri(),
     },
     discovery,
+  );
+  // public_profile is granted by default; email is all we must ask for.
+  const [fbRequest, fbResponse, fbPromptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId: FB_APP_ID,
+      scopes: ['email'],
+      responseType: AuthSession.ResponseType.Code,
+      redirectUri: AuthSession.makeRedirectUri(),
+    },
+    FB_DISCOVERY,
   );
 
   useEffect(() => {
@@ -51,6 +70,29 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
       });
   }, [response, onLoggedIn]);
 
+  useEffect(() => {
+    if (fbResponse?.type !== 'success') {
+      return;
+    }
+    const code = fbResponse.params.code;
+    const redirectUri = fbRequest?.redirectUri;
+    if (typeof code !== 'string' || code.length === 0 || !redirectUri) {
+      setError('Facebook login failed');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    api
+      .facebookLogin(code, redirectUri)
+      .then(({ token }) =>
+        AsyncStorage.setItem('kidlearn.token', token).then(() => onLoggedIn(token)),
+      )
+      .catch((err: unknown) => {
+        setError(err instanceof ApiError ? err.message : 'Facebook login failed');
+        setLoading(false);
+      });
+  }, [fbResponse, fbRequest, onLoggedIn]);
+
   async function handleDevLogin(who?: string) {
     setLoading(true);
     setError(null);
@@ -65,6 +107,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
   }
 
   const googleReady = GOOGLE_CLIENT_ID.length > 0 && request !== null;
+  const fbReady = FB_APP_ID.length > 0 && fbRequest !== null;
 
   return (
     <Screen>
@@ -102,6 +145,15 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
         }}
         color="blue"
         disabled={!googleReady || loading}
+      />
+      <View style={styles.gap} />
+      <ChunkyButton
+        title={FB_APP_ID ? t('facebookLogin') : t('facebookSoon')}
+        onPress={() => {
+          void fbPromptAsync();
+        }}
+        color="blue"
+        disabled={!fbReady || loading}
       />
     </Screen>
   );

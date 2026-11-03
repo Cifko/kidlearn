@@ -190,6 +190,11 @@ export const api = {
       method: 'POST',
       body: { id_token: idToken },
     }),
+  facebookLogin: (code: string, redirectUri: string) =>
+    request<{ token: string; user: User }>('/auth/facebook', {
+      method: 'POST',
+      body: { code, redirect_uri: redirectUri },
+    }),
   me: (token: string) => request<User>('/me', { token }),
   listSubjects: (token: string, q?: string, lang?: string, visibility?: string) => {
     const search = new URLSearchParams();
