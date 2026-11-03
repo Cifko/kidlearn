@@ -1,4 +1,5 @@
-import React, { createContext, ReactNode, useContext, useState } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LANGUAGES } from './languages';
 
 export type Lang = (typeof LANGUAGES)[number]['code'];
@@ -1930,7 +1931,20 @@ const LangContext = createContext<LangContextValue>({
 });
 
 export function LangProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>('en');
+  const [lang, setLangState] = useState<Lang>('en');
+  // Local only: the UI language lives on the device, never on the server.
+  useEffect(() => {
+    AsyncStorage.getItem('kidlearn.lang').then((value) => {
+      const match = LANGUAGES.find((entry) => entry.code === value);
+      if (match) {
+        setLangState(match.code);
+      }
+    });
+  }, []);
+  const setLang = useCallback((next: Lang) => {
+    setLangState(next);
+    AsyncStorage.setItem('kidlearn.lang', next).catch(() => {});
+  }, []);
   const t = (key: StringKey): string => strings[lang][key];
   return <LangContext.Provider value={{ lang, setLang, t }}>{children}</LangContext.Provider>;
 }
