@@ -94,6 +94,29 @@ function MathSvg({
   return <SvgXml xml={rendered.svg} override={{ width, height }} />;
 }
 
+/**
+ * AI-generated formulas are untrusted input: if a rendered SVG ever
+ * crashes its renderer (seen once as a WebShape throw on web), degrade
+ * to plain text instead of killing the whole lesson screen.
+ */
+class RenderBoundary extends React.Component<
+  { fallback: React.ReactNode; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
 const FONT_KEYS = ['fontSize', 'color', 'fontWeight', 'fontStyle', 'lineHeight'] as const;
 
 export function MathText({
@@ -129,22 +152,28 @@ export function MathText({
     justifyContent: center ? 'center' : 'flex-start',
   };
   return (
-    <View style={[style, rowStyle]}>
-      {spans.map((span, index) =>
-        span.kind === 'text' ? (
-          <Text key={index} style={fontStyle}>
-            {span.text}
-          </Text>
-        ) : (
-          <MathSvg
-            key={index}
-            tex={span.tex}
-            fontSize={fontSize}
-            maxWidth={maxWidth}
-            maxHeight={maxHeight}
-          />
-        ),
-      )}
-    </View>
+    <RenderBoundary fallback={<Text style={style}>{text}</Text>}>
+      <View style={[style, rowStyle]}>
+        {spans.map((span, index) =>
+          span.kind === 'text' ? (
+            <Text key={index} style={fontStyle}>
+              {span.text}
+            </Text>
+          ) : (
+            <RenderBoundary
+              key={`${index}:${span.tex}`}
+              fallback={<Text style={fontStyle}>{span.tex}</Text>}
+            >
+              <MathSvg
+                tex={span.tex}
+                fontSize={fontSize}
+                maxWidth={maxWidth}
+                maxHeight={maxHeight}
+              />
+            </RenderBoundary>
+          ),
+        )}
+      </View>
+    </RenderBoundary>
   );
 }
