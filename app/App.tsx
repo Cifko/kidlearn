@@ -15,7 +15,7 @@ type Route =
   | { name: 'login' }
   | { name: 'home' }
   | { name: 'create' }
-  | { name: 'detail'; id: number }
+  | { name: 'detail'; id: number; focusLessonId?: number }
   | { name: 'learn'; subjectId: number; lessonId: number }
   | { name: 'prompts' };
 
@@ -84,7 +84,7 @@ function Shell() {
       <LearnScreen
         token={token}
         lessonId={route.lessonId}
-        onExit={() => setRoute({ name: 'detail', id: route.subjectId })}
+        onExit={(lessonId) => setRoute({ name: 'detail', id: route.subjectId, focusLessonId: lessonId })}
       />
     );
   }
@@ -94,6 +94,7 @@ function Shell() {
       <DetailScreen
         token={token}
         subjectId={route.id}
+        focusLessonId={route.focusLessonId}
         onBack={() => setRoute({ name: 'home' })}
         onDeleted={() => setRoute({ name: 'home' })}
         onLearn={(lessonId) => setRoute({ name: 'learn', subjectId: route.id, lessonId })}
