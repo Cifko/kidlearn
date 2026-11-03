@@ -39,7 +39,8 @@ export function CreateScreen({
     }
     setPrereqBusy(true);
     try {
-      const found = await api.listSubjects(token, needle, lang);
+      // Only published subjects are immutable enough to build on.
+      const found = await api.listSubjects(token, needle, lang, 'public');
       setPrereqResults(found.filter((hit) => !prereqs.some((p) => p.id === hit.id)).slice(0, 8));
     } catch {
       setPrereqResults([]);
@@ -200,7 +201,7 @@ export function CreateScreen({
           >
             <Text style={styles.hitTitle}>{hit.title}</Text>
             <Text style={styles.hitMeta}>
-              {hit.owner_name} · {hit.lesson_count}
+              {hit.owner_name} · ID {hit.id} · {hit.lesson_count}
             </Text>
           </TouchableOpacity>
         ))}

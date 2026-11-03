@@ -37,6 +37,7 @@ export interface LessonSummary {
 export interface PrerequisiteRef {
   id: number;
   title: string;
+  owner_name: string;
 }
 
 export interface SubjectDetail extends SubjectSummary {
@@ -189,13 +190,16 @@ export const api = {
       body: { id_token: idToken },
     }),
   me: (token: string) => request<User>('/me', { token }),
-  listSubjects: (token: string, q?: string, lang?: string) => {
+  listSubjects: (token: string, q?: string, lang?: string, visibility?: string) => {
     const search = new URLSearchParams();
     if (q) {
       search.set('q', q);
     }
     if (lang) {
       search.set('lang', lang);
+    }
+    if (visibility) {
+      search.set('visibility', visibility);
     }
     const query = search.toString();
     return request<SubjectSummary[]>(`/subjects${query ? `?${query}` : ''}`, { token });

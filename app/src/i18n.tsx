@@ -69,7 +69,9 @@ const en = {
   "all": "All",
   "prompt": "Prompt",
   "response": "Response",
-  "basedOn": "Based on"
+  "basedOn": "Based on",
+  "createdBy": "Created by",
+  "copy": "Copy"
 } as const;
 
 export type StringKey = keyof typeof en;
@@ -140,7 +142,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Všetko",
     "prompt": "Prompt",
     "response": "Odpoveď",
-    "basedOn": "Nadväzuje na"
+    "basedOn": "Nadväzuje na",
+    "createdBy": "Vytvoril",
+    "copy": "Kopírovať"
   }
 ,
   ar:   {
@@ -207,7 +211,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "الكل",
     "prompt": "الموجه",
     "response": "الرد",
-    "basedOn": "مبني على"
+    "basedOn": "مبني على",
+    "createdBy": "أنشأه",
+    "copy": "نسخ"
   },
   bg:   {
     "tagline": "Научи всичко, стъпка по стъпка.",
@@ -273,7 +279,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Всички",
     "prompt": "Подкана",
     "response": "Отговор",
-    "basedOn": "Базирано на"
+    "basedOn": "Базирано на",
+    "createdBy": "Създадено от",
+    "copy": "Копирай"
   },
   cs:   {
     "tagline": "Nauč se cokoli, krůček po krůčku.",
@@ -339,7 +347,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Vše",
     "prompt": "Zadání",
     "response": "Odpověď",
-    "basedOn": "Navazuje na"
+    "basedOn": "Navazuje na",
+    "createdBy": "Vytvořil",
+    "copy": "Kopírovat"
   },
   da:   {
     "tagline": "Lær alt, et lille skridt ad gangen.",
@@ -405,7 +415,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Alle",
     "prompt": "Prompt",
     "response": "Svar",
-    "basedOn": "Bygger på"
+    "basedOn": "Bygger på",
+    "createdBy": "Oprettet af",
+    "copy": "Kopiér"
   },
   de:   {
     "tagline": "Lerne alles, Schritt für Schritt.",
@@ -471,7 +483,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Alle",
     "prompt": "Prompt",
     "response": "Antwort",
-    "basedOn": "Baut auf"
+    "basedOn": "Baut auf",
+    "createdBy": "Erstellt von",
+    "copy": "Kopieren"
   },
   el:   {
     "tagline": "Μάθε τα πάντα, ένα μικρό βηματάκι τη φορά.",
@@ -537,7 +551,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Όλα",
     "prompt": "Προτροπή",
     "response": "Απάντηση",
-    "basedOn": "Βασίζεται σε"
+    "basedOn": "Βασίζεται σε",
+    "createdBy": "Δημιουργήθηκε από",
+    "copy": "Αντιγραφή"
   },
   es:   {
     "tagline": "Aprende lo que quieras, pasito a pasito.",
@@ -603,7 +619,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Todos",
     "prompt": "Instrucción",
     "response": "Respuesta",
-    "basedOn": "Basado en"
+    "basedOn": "Basado en",
+    "createdBy": "Creado por",
+    "copy": "Copiar"
   },
   fi:   {
     "tagline": "Opi mitä vain, yksi pieni askel kerrallaan.",
@@ -669,7 +687,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Kaikki",
     "prompt": "Kehote",
     "response": "Vastaus",
-    "basedOn": "Perustuu"
+    "basedOn": "Perustuu",
+    "createdBy": "Tekijä",
+    "copy": "Kopioi"
   },
   fr:   {
     "tagline": "Apprends tout, un petit pas à la fois.",
@@ -735,7 +755,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Tout",
     "prompt": "Prompt",
     "response": "Réponse",
-    "basedOn": "Basé sur"
+    "basedOn": "Basé sur",
+    "createdBy": "Créé par",
+    "copy": "Copier"
   },
   hi:   {
     "tagline": "कुछ भी सीखो, एक-एक छोटे कदम से.",
@@ -801,7 +823,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "सभी",
     "prompt": "प्रॉम्प्ट",
     "response": "उत्तर",
-    "basedOn": "पर आधारित"
+    "basedOn": "पर आधारित",
+    "createdBy": "द्वारा बनाया गया",
+    "copy": "कॉपी करें"
   },
   hr:   {
     "tagline": "Nauči bilo što, jedan mali korak po jedan.",
@@ -867,7 +891,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Sve",
     "prompt": "Upit",
     "response": "Odgovor",
-    "basedOn": "Temelji se na"
+    "basedOn": "Temelji se na",
+    "createdBy": "Izradio",
+    "copy": "Kopiraj"
   },
   hu:   {
     "tagline": "Tanulj bármit, egy kis lépésenként.",
@@ -933,7 +959,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Összes",
     "prompt": "Prompt",
     "response": "Válasz",
-    "basedOn": "Erre épül"
+    "basedOn": "Erre épül",
+    "createdBy": "Készítette",
+    "copy": "Másolás"
   },
   it:   {
     "tagline": "Impara tutto, un piccolo passo alla volta.",
@@ -999,7 +1027,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Tutti",
     "prompt": "Prompt",
     "response": "Risposta",
-    "basedOn": "Basato su"
+    "basedOn": "Basato su",
+    "createdBy": "Creato da",
+    "copy": "Copia"
   },
   ja:   {
     "tagline": "ちいさな一歩ずつ、なんでも学ぼう.",
@@ -1065,7 +1095,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "ぜんぶ",
     "prompt": "プロンプト",
     "response": "へんじ",
-    "basedOn": "基づく"
+    "basedOn": "基づく",
+    "createdBy": "作成者",
+    "copy": "コピー"
   },
   nl:   {
     "tagline": "Leer alles, één klein stapje tegelijk.",
@@ -1131,7 +1163,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Alle",
     "prompt": "Prompt",
     "response": "Antwoord",
-    "basedOn": "Gebaseerd op"
+    "basedOn": "Gebaseerd op",
+    "createdBy": "Gemaakt door",
+    "copy": "Kopiëren"
   },
   no:   {
     "tagline": "Lær hva som helst, ett lite steg om gangen.",
@@ -1197,7 +1231,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Alle",
     "prompt": "Ledetekst",
     "response": "Svar",
-    "basedOn": "Bygger på"
+    "basedOn": "Bygger på",
+    "createdBy": "Opprettet av",
+    "copy": "Kopiér"
   },
   pl:   {
     "tagline": "Ucz się wszystkiego, małymi kroczkami.",
@@ -1263,7 +1299,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Wszystkie",
     "prompt": "Polecenie",
     "response": "Odpowiedź",
-    "basedOn": "Bazuje na"
+    "basedOn": "Bazuje na",
+    "createdBy": "Utworzył",
+    "copy": "Kopiuj"
   },
   pt:   {
     "tagline": "Aprende qualquer coisa, um passinho de cada vez.",
@@ -1329,7 +1367,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Todos",
     "prompt": "Prompt",
     "response": "Resposta",
-    "basedOn": "Baseado em"
+    "basedOn": "Baseado em",
+    "createdBy": "Criado por",
+    "copy": "Copiar"
   },
   ro:   {
     "tagline": "Învață orice, pas cu pas.",
@@ -1395,7 +1435,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Toate",
     "prompt": "Prompt",
     "response": "Răspuns",
-    "basedOn": "Bazat pe"
+    "basedOn": "Bazat pe",
+    "createdBy": "Creat de",
+    "copy": "Copiază"
   },
   ru:   {
     "tagline": "Учись чему угодно, шаг за шагом!",
@@ -1461,7 +1503,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Все",
     "prompt": "Промпт",
     "response": "Ответ",
-    "basedOn": "Основано на"
+    "basedOn": "Основано на",
+    "createdBy": "Автор",
+    "copy": "Копировать"
   },
   sl:   {
     "tagline": "Nauči se karkoli, korak za korakom.",
@@ -1527,7 +1571,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Vse",
     "prompt": "Poziv",
     "response": "Odgovor",
-    "basedOn": "Temelji na"
+    "basedOn": "Temelji na",
+    "createdBy": "Ustvaril",
+    "copy": "Kopiraj"
   },
   sr:   {
     "tagline": "Научи било шта, корак по корак.",
@@ -1593,7 +1639,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Све",
     "prompt": "Упит",
     "response": "Одговор",
-    "basedOn": "Засновано на"
+    "basedOn": "Засновано на",
+    "createdBy": "Направио",
+    "copy": "Копирај"
   },
   sv:   {
     "tagline": "Lär dig vad som helst, ett litet steg i taget.",
@@ -1659,7 +1707,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Alla",
     "prompt": "Prompt",
     "response": "Svar",
-    "basedOn": "Bygger på"
+    "basedOn": "Bygger på",
+    "createdBy": "Skapad av",
+    "copy": "Kopiera"
   },
   tr:   {
     "tagline": "Her şeyi, minik adımlarla öğren.",
@@ -1725,7 +1775,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Tümü",
     "prompt": "İstem",
     "response": "Yanıt",
-    "basedOn": "Temeli"
+    "basedOn": "Temeli",
+    "createdBy": "Oluşturan",
+    "copy": "Kopyala"
   },
   uk:   {
     "tagline": "Вивчай будь-що, маленькими кроками.",
@@ -1791,7 +1843,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "Усі",
     "prompt": "Запит",
     "response": "Відповідь",
-    "basedOn": "Ґрунтується на"
+    "basedOn": "Ґрунтується на",
+    "createdBy": "Автор",
+    "copy": "Копіювати"
   },
   zh:   {
     "tagline": "一次一小步，轻松学会任何知识。",
@@ -1857,7 +1911,9 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "all": "全部",
     "prompt": "提示词",
     "response": "回答",
-    "basedOn": "基于"
+    "basedOn": "基于",
+    "createdBy": "创建者",
+    "copy": "复制"
   }
 };
 

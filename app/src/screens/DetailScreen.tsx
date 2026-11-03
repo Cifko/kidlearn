@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { api, ApiError, SubjectDetail, LessonProgress } from '../api';
 import { useLang } from '../i18n';
 import { languageLabel } from '../languages';
@@ -38,6 +39,8 @@ export function DetailScreen({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingPublish, setConfirmingPublish] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [idCopied, setIdCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef = useRef<ScrollViewInstance>(null);
   const listY = useRef(0);
   const listMeasured = useRef(false);
@@ -141,9 +144,24 @@ export function DetailScreen({
       if (scrollTimer.current) {
         clearTimeout(scrollTimer.current);
       }
+      if (copyTimer.current) {
+        clearTimeout(copyTimer.current);
+      }
     },
     [],
   );
+
+  async function handleCopyId() {
+    if (!detail) {
+      return;
+    }
+    await Clipboard.setStringAsync(String(detail.id));
+    setIdCopied(true);
+    if (copyTimer.current) {
+      clearTimeout(copyTimer.current);
+    }
+    copyTimer.current = setTimeout(() => setIdCopied(false), 2000);
+  }
 
   async function handleRegenerate() {
     if (!detail) {
@@ -227,11 +245,17 @@ export function DetailScreen({
         <>
           <Text style={styles.heading}>{detail.title}</Text>
           <Text style={styles.meta}>
-            {detail.owner_name} · {languageLabel(detail.language)} ·{' '}
+            {t('createdBy')} {detail.owner_name} · {languageLabel(detail.language)} ·{' '}
             {detail.visibility === 'public' ? t('public') : t('private')}
             {detail.grade != null && ` · ${t('grade')} ${detail.grade === 5 ? '5+' : detail.grade}`}
             {detail.modality === 'text_only' && ` · ${t('picturesTextOnly')}`}
           </Text>
+          <View style={styles.idRow}>
+            <Text style={styles.idText}>ID {detail.id}</Text>
+            <TouchableOpacity style={styles.copyButton} onPress={handleCopyId}>
+              <Text style={styles.copyButtonText}>{idCopied ? '✓' : t('copy')}</Text>
+            </TouchableOpacity>
+          </View>
           {detail.description.length > 0 && (
             <Text style={styles.description}>{detail.description}</Text>
           )}
@@ -249,7 +273,9 @@ export function DetailScreen({
               <Text style={styles.basedOn}>{t('basedOn')}:</Text>
               {detail.prerequisites.map((prereq) => (
                 <TouchableOpacity key={prereq.id} onPress={() => onOpenSubject(prereq.id)}>
-                  <Text style={styles.tag}>{prereq.title}</Text>
+                  <Text style={styles.tag}>
+                    {prereq.title} · {prereq.owner_name}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -448,6 +474,28 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.muted,
     paddingVertical: 4,
+  },
+  idRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  idText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.muted,
+  },
+  copyButton: {
+    backgroundColor: colors.blueDark,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  copyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   muted: {
     fontSize: 15,
