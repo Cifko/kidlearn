@@ -114,6 +114,7 @@ pub struct LessonWithCount {
 pub struct PrerequisiteRef {
     pub id: i64,
     pub title: String,
+    pub owner_name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -139,6 +140,7 @@ const SUMMARY_COLUMNS: &str = "c.id, c.title, c.description, c.language, c.visib
 struct ListQuery {
     q: Option<String>,
     lang: Option<String>,
+    visibility: Option<String>,
 }
 
 async fn list_subjects(
@@ -148,6 +150,7 @@ async fn list_subjects(
 ) -> Result<Json<Vec<SubjectSummary>>, AppError> {
     let needle = query.q.unwrap_or_default().trim().to_string();
     let lang = query.lang.unwrap_or_default().trim().to_string();
+    let visibility = query.visibility.unwrap_or_default().trim().to_string();
     let mut sql =
         format!("SELECT {SUMMARY_COLUMNS} WHERE (c.visibility = 'public' OR c.owner_id = ?1)");
     let mut param = 2;
@@ -160,6 +163,10 @@ async fn list_subjects(
     }
     if !lang.is_empty() {
         sql.push_str(&format!(" AND c.language = ?{param}"));
+        param += 1;
+    }
+    if visibility == "public" || visibility == "private" {
+        sql.push_str(&format!(" AND c.visibility = ?{param}"));
     }
     sql.push_str(" ORDER BY c.id DESC");
     let mut select = sqlx::query_as::<_, SubjectRow>(&sql).bind(auth.0.id);
@@ -168,6 +175,9 @@ async fn list_subjects(
     }
     if !lang.is_empty() {
         select = select.bind(lang);
+    }
+    if visibility == "public" || visibility == "private" {
+        select = select.bind(visibility);
     }
     let rows: Vec<SubjectRow> = select.fetch_all(&state.db).await?;
     Ok(Json(rows.into_iter().map(SubjectSummary::from).collect()))
@@ -323,7 +333,7 @@ async fn create_subject(
         }
     };
     let prerequisite_ids = normalize_prerequisites(input.prerequisite_ids.unwrap_or_default())?;
-    check_prerequisites_visible(&state.db, auth.0.id, &prerequisite_ids).await?;
+    check_prerequisites(&state.db, auth.0.id, &prerequisite_ids).await?;
 
     let (id,): (i64,) = sqlx::query_as(
         "INSERT INTO subjects (owner_id, title, description, language, visibility, status, lesson_count, tags_json, grade, modality)
@@ -394,8 +404,9 @@ pub async fn subject_detail(
     .await?;
 
     let prerequisites = sqlx::query_as::<_, PrerequisiteRef>(
-        "SELECT s.id, s.title FROM subject_prerequisites p
+        "SELECT s.id, s.title, u.name AS owner_name FROM subject_prerequisites p
          JOIN subjects s ON s.id = p.prerequisite_id
+         JOIN users u ON u.id = s.owner_id
          WHERE p.subject_id = ? ORDER BY p.rowid",
     )
     .bind(subject_id)
@@ -444,10 +455,11 @@ fn normalize_prerequisites(ids: Vec<i64>) -> Result<Vec<i64>, AppError> {
     Ok(out)
 }
 
-/// Every prerequisite must exist and be visible to the creator (own or
-/// public). Unknown and hidden ids fail alike, so private subjects of
-/// others cannot be probed or leak into AI context.
-async fn check_prerequisites_visible(
+/// Every prerequisite must exist, be visible to the creator, and be
+/// published: only public subjects are immutable, so only they are safe
+/// to build on. Unknown and hidden ids fail alike, so private subjects
+/// of others cannot be probed or leak into AI context.
+async fn check_prerequisites(
     pool: &sqlx::SqlitePool,
     user_id: i64,
     ids: &[i64],
@@ -457,17 +469,22 @@ async fn check_prerequisites_visible(
     }
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
     let sql = format!(
-        "SELECT COUNT(*) AS count FROM subjects
+        "SELECT visibility FROM subjects
          WHERE id IN ({placeholders}) AND (visibility = 'public' OR owner_id = ?)"
     );
-    let mut select = sqlx::query_scalar::<_, i64>(&sql);
+    let mut select = sqlx::query_scalar::<_, String>(&sql);
     for id in ids {
         select = select.bind(id);
     }
-    let found: i64 = select.bind(user_id).fetch_one(pool).await?;
-    if found as usize != ids.len() {
+    let found: Vec<String> = select.bind(user_id).fetch_all(pool).await?;
+    if found.len() != ids.len() {
         return Err(AppError::BadRequest(
             "a prerequisite subject was not found".to_string(),
+        ));
+    }
+    if found.iter().any(|visibility| visibility != "public") {
+        return Err(AppError::BadRequest(
+            "prerequisites must be published subjects".to_string(),
         ));
     }
     Ok(())

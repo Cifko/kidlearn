@@ -845,6 +845,24 @@ async fn login_token_as(app: &axum::Router, who: &str) -> String {
     json["token"].as_str().unwrap().to_string()
 }
 
+async fn list_with(app: &axum::Router, token: &str, query: &str) -> serde_json::Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/subjects{query}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .unwrap();
+    serde_json::from_slice(&body).unwrap()
+}
+
 async fn get_detail(app: &axum::Router, token: &str, id: i64) -> serde_json::Value {
     let response = app
         .clone()
@@ -869,6 +887,8 @@ async fn create_with_prerequisites_shows_them_on_detail() {
     let token = login_token(&app).await;
     let (_, base) = create_subject(&app, &token, json!({ "title": "WW2" })).await;
     let base_id = base["id"].as_i64().unwrap();
+    let (status, _) = publish(&app, &token, base_id).await;
+    assert_eq!(status, StatusCode::OK);
 
     let (status, advanced) = create_subject(
         &app,
@@ -885,32 +905,47 @@ async fn create_with_prerequisites_shows_them_on_detail() {
     assert_eq!(detail["prerequisites"].as_array().unwrap().len(), 1);
     assert_eq!(detail["prerequisites"][0]["id"], base_id);
     assert_eq!(detail["prerequisites"][0]["title"], "WW2");
+    assert_eq!(detail["prerequisites"][0]["owner_name"], "Dev");
 }
 
 #[tokio::test]
-async fn create_rejects_unknown_and_hidden_prerequisites() {
+async fn create_rejects_unknown_hidden_and_private_prerequisites() {
     let (_pool, app) = test_state().await;
     let mine = login_token(&app).await;
     let other = login_token_as(&app, "dev2").await;
     let (_, hidden) = create_subject(&app, &other, json!({ "title": "Hidden" })).await;
     let hidden_id = hidden["id"].as_i64().unwrap();
+    let (_, own) = create_subject(&app, &mine, json!({ "title": "Own" })).await;
+    let own_id = own["id"].as_i64().unwrap();
 
     // Someone else's private subject: same rejection as a missing id.
-    let (status, _) = create_subject(
+    let (status, body) = create_subject(
         &app,
         &mine,
         json!({ "title": "Based", "prerequisite_ids": [hidden_id] }),
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], "a prerequisite subject was not found");
 
-    let (status, _) = create_subject(
+    let (status, body) = create_subject(
         &app,
         &mine,
         json!({ "title": "Based", "prerequisite_ids": [999999] }),
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], "a prerequisite subject was not found");
+
+    // Own but private: only published subjects are safe to build on.
+    let (status, body) = create_subject(
+        &app,
+        &mine,
+        json!({ "title": "Based", "prerequisite_ids": [own_id] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], "prerequisites must be published subjects");
 
     // Once public, the same subject links fine.
     let (status, _) = publish(&app, &other, hidden_id).await;
@@ -922,6 +957,24 @@ async fn create_rejects_unknown_and_hidden_prerequisites() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
+}
+
+#[tokio::test]
+async fn list_filters_by_visibility() {
+    let (_pool, app) = test_state().await;
+    let token = login_token(&app).await;
+    let (_, own) = create_subject(&app, &token, json!({ "title": "Own" })).await;
+    let own_id = own["id"].as_i64().unwrap();
+
+    let list = list_with(&app, &token, "?visibility=public").await;
+    assert_eq!(list.as_array().unwrap().len(), 0);
+
+    let (status, _) = publish(&app, &token, own_id).await;
+    assert_eq!(status, StatusCode::OK);
+    let list = list_with(&app, &token, "?visibility=public").await;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    let list = list_with(&app, &token, "?visibility=private").await;
+    assert_eq!(list.as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -940,10 +993,12 @@ async fn create_rejects_too_many_prerequisites() {
 
 #[tokio::test]
 async fn delete_removes_prerequisite_links() {
-    let (_pool, app) = test_state().await;
+    let (pool, app) = test_state().await;
     let token = login_token(&app).await;
     let (_, base) = create_subject(&app, &token, json!({ "title": "Base" })).await;
     let base_id = base["id"].as_i64().unwrap();
+    let (status, _) = publish(&app, &token, base_id).await;
+    assert_eq!(status, StatusCode::OK);
     let (_, based) = create_subject(
         &app,
         &token,
@@ -955,7 +1010,7 @@ async fn delete_removes_prerequisite_links() {
     let response = app
         .clone()
         .oneshot(
-            Request::delete(format!("/subjects/{base_id}"))
+            Request::delete(format!("/subjects/{based_id}"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -964,6 +1019,9 @@ async fn delete_removes_prerequisite_links() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
-    let detail = get_detail(&app, &token, based_id).await;
-    assert_eq!(detail["prerequisites"].as_array().unwrap().len(), 0);
+    let links: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM subject_prerequisites")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(links, 0);
 }

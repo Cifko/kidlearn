@@ -577,6 +577,20 @@ async fn create_subject_body(app: &axum::Router, token: &str, body: serde_json::
     json["id"].as_i64().unwrap()
 }
 
+async fn publish_subject(app: &axum::Router, token: &str, id: i64) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post(format!("/subjects/{id}/publish"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
 /// Chain A -> B -> C: generating C feeds both ancestors' lesson plans
 /// (direct and transitive) into the plan and questions prompts.
 #[tokio::test]
@@ -595,6 +609,7 @@ async fn generate_includes_transitive_prerequisite_context() {
         .execute(&pool)
         .await
         .unwrap();
+    publish_subject(&app, &token, a).await;
     let b = create_subject_body(
         &app,
         &token,
@@ -606,6 +621,7 @@ async fn generate_includes_transitive_prerequisite_context() {
         .execute(&pool)
         .await
         .unwrap();
+    publish_subject(&app, &token, b).await;
     let c = create_subject_body(
         &app,
         &token,
