@@ -92,12 +92,14 @@ function Shell() {
   if (route.name === 'detail') {
     return (
       <DetailScreen
+        key={route.id}
         token={token}
         subjectId={route.id}
         focusLessonId={route.focusLessonId}
         onBack={() => setRoute({ name: 'home' })}
         onDeleted={() => setRoute({ name: 'home' })}
         onLearn={(lessonId) => setRoute({ name: 'learn', subjectId: route.id, lessonId })}
+        onOpenSubject={(id) => setRoute({ name: 'detail', id })}
       />
     );
   }

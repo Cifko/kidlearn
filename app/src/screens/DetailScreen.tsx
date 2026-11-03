@@ -19,6 +19,7 @@ export function DetailScreen({
   onBack,
   onDeleted,
   onLearn,
+  onOpenSubject,
 }: {
   token: string;
   subjectId: number;
@@ -26,6 +27,7 @@ export function DetailScreen({
   onBack: () => void;
   onDeleted: () => void;
   onLearn: (lessonId: number) => void;
+  onOpenSubject: (subjectId: number) => void;
 }) {
   const { t } = useLang();
   const [detail, setDetail] = useState<SubjectDetail | null>(null);
@@ -242,6 +244,16 @@ export function DetailScreen({
               ))}
             </View>
           )}
+          {detail.prerequisites.length > 0 && (
+            <View style={styles.tags}>
+              <Text style={styles.basedOn}>{t('basedOn')}:</Text>
+              {detail.prerequisites.map((prereq) => (
+                <TouchableOpacity key={prereq.id} onPress={() => onOpenSubject(prereq.id)}>
+                  <Text style={styles.tag}>{prereq.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
           {detail.status === 'generating' && (
             <Text style={styles.statusGenerating}>
               {t('generatingShort')} ({detail.generated_lessons}/{detail.lesson_count})
@@ -430,6 +442,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     overflow: 'hidden',
+  },
+  basedOn: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.muted,
+    paddingVertical: 4,
   },
   muted: {
     fontSize: 15,

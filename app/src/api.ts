@@ -34,8 +34,14 @@ export interface LessonSummary {
   question_count: number;
 }
 
+export interface PrerequisiteRef {
+  id: number;
+  title: string;
+}
+
 export interface SubjectDetail extends SubjectSummary {
   lessons: LessonSummary[];
+  prerequisites: PrerequisiteRef[];
 }
 
 export interface CreateSubjectInput {
@@ -46,6 +52,7 @@ export interface CreateSubjectInput {
   tags?: string[];
   grade?: number | null;
   modality?: string;
+  prerequisite_ids?: number[];
 }
 
 export interface LessonOption {

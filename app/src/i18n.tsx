@@ -68,7 +68,8 @@ const en = {
   "prompts": "AI prompts",
   "all": "All",
   "prompt": "Prompt",
-  "response": "Response"
+  "response": "Response",
+  "basedOn": "Based on"
 } as const;
 
 export type StringKey = keyof typeof en;
@@ -138,7 +139,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI prompty",
     "all": "Všetko",
     "prompt": "Prompt",
-    "response": "Odpoveď"
+    "response": "Odpoveď",
+    "basedOn": "Nadväzuje na"
   }
 ,
   ar:   {
@@ -204,7 +206,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "موجهات الذكاء الاصطناعي",
     "all": "الكل",
     "prompt": "الموجه",
-    "response": "الرد"
+    "response": "الرد",
+    "basedOn": "مبني على"
   },
   bg:   {
     "tagline": "Научи всичко, стъпка по стъпка.",
@@ -269,7 +272,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "ИИ подкани",
     "all": "Всички",
     "prompt": "Подкана",
-    "response": "Отговор"
+    "response": "Отговор",
+    "basedOn": "Базирано на"
   },
   cs:   {
     "tagline": "Nauč se cokoli, krůček po krůčku.",
@@ -334,7 +338,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI prompty",
     "all": "Vše",
     "prompt": "Zadání",
-    "response": "Odpověď"
+    "response": "Odpověď",
+    "basedOn": "Navazuje na"
   },
   da:   {
     "tagline": "Lær alt, et lille skridt ad gangen.",
@@ -399,7 +404,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI-prompter",
     "all": "Alle",
     "prompt": "Prompt",
-    "response": "Svar"
+    "response": "Svar",
+    "basedOn": "Bygger på"
   },
   de:   {
     "tagline": "Lerne alles, Schritt für Schritt.",
@@ -464,7 +470,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "KI-Prompts",
     "all": "Alle",
     "prompt": "Prompt",
-    "response": "Antwort"
+    "response": "Antwort",
+    "basedOn": "Baut auf"
   },
   el:   {
     "tagline": "Μάθε τα πάντα, ένα μικρό βηματάκι τη φορά.",
@@ -529,7 +536,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Προτροπές AI",
     "all": "Όλα",
     "prompt": "Προτροπή",
-    "response": "Απάντηση"
+    "response": "Απάντηση",
+    "basedOn": "Βασίζεται σε"
   },
   es:   {
     "tagline": "Aprende lo que quieras, pasito a pasito.",
@@ -594,7 +602,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Prompts de IA",
     "all": "Todos",
     "prompt": "Instrucción",
-    "response": "Respuesta"
+    "response": "Respuesta",
+    "basedOn": "Basado en"
   },
   fi:   {
     "tagline": "Opi mitä vain, yksi pieni askel kerrallaan.",
@@ -659,7 +668,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Tekoälykehotteet",
     "all": "Kaikki",
     "prompt": "Kehote",
-    "response": "Vastaus"
+    "response": "Vastaus",
+    "basedOn": "Perustuu"
   },
   fr:   {
     "tagline": "Apprends tout, un petit pas à la fois.",
@@ -724,7 +734,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Prompts IA",
     "all": "Tout",
     "prompt": "Prompt",
-    "response": "Réponse"
+    "response": "Réponse",
+    "basedOn": "Basé sur"
   },
   hi:   {
     "tagline": "कुछ भी सीखो, एक-एक छोटे कदम से.",
@@ -789,7 +800,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI प्रॉम्प्ट",
     "all": "सभी",
     "prompt": "प्रॉम्प्ट",
-    "response": "उत्तर"
+    "response": "उत्तर",
+    "basedOn": "पर आधारित"
   },
   hr:   {
     "tagline": "Nauči bilo što, jedan mali korak po jedan.",
@@ -854,7 +866,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI upiti",
     "all": "Sve",
     "prompt": "Upit",
-    "response": "Odgovor"
+    "response": "Odgovor",
+    "basedOn": "Temelji se na"
   },
   hu:   {
     "tagline": "Tanulj bármit, egy kis lépésenként.",
@@ -919,7 +932,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "MI promptok",
     "all": "Összes",
     "prompt": "Prompt",
-    "response": "Válasz"
+    "response": "Válasz",
+    "basedOn": "Erre épül"
   },
   it:   {
     "tagline": "Impara tutto, un piccolo passo alla volta.",
@@ -984,7 +998,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Prompt AI",
     "all": "Tutti",
     "prompt": "Prompt",
-    "response": "Risposta"
+    "response": "Risposta",
+    "basedOn": "Basato su"
   },
   ja:   {
     "tagline": "ちいさな一歩ずつ、なんでも学ぼう.",
@@ -1049,7 +1064,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AIプロンプト",
     "all": "ぜんぶ",
     "prompt": "プロンプト",
-    "response": "へんじ"
+    "response": "へんじ",
+    "basedOn": "基づく"
   },
   nl:   {
     "tagline": "Leer alles, één klein stapje tegelijk.",
@@ -1114,7 +1130,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI-prompts",
     "all": "Alle",
     "prompt": "Prompt",
-    "response": "Antwoord"
+    "response": "Antwoord",
+    "basedOn": "Gebaseerd op"
   },
   no:   {
     "tagline": "Lær hva som helst, ett lite steg om gangen.",
@@ -1179,7 +1196,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI-prompter",
     "all": "Alle",
     "prompt": "Ledetekst",
-    "response": "Svar"
+    "response": "Svar",
+    "basedOn": "Bygger på"
   },
   pl:   {
     "tagline": "Ucz się wszystkiego, małymi kroczkami.",
@@ -1244,7 +1262,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Prompty AI",
     "all": "Wszystkie",
     "prompt": "Polecenie",
-    "response": "Odpowiedź"
+    "response": "Odpowiedź",
+    "basedOn": "Bazuje na"
   },
   pt:   {
     "tagline": "Aprende qualquer coisa, um passinho de cada vez.",
@@ -1309,7 +1328,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Prompts de IA",
     "all": "Todos",
     "prompt": "Prompt",
-    "response": "Resposta"
+    "response": "Resposta",
+    "basedOn": "Baseado em"
   },
   ro:   {
     "tagline": "Învață orice, pas cu pas.",
@@ -1374,7 +1394,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Prompturi AI",
     "all": "Toate",
     "prompt": "Prompt",
-    "response": "Răspuns"
+    "response": "Răspuns",
+    "basedOn": "Bazat pe"
   },
   ru:   {
     "tagline": "Учись чему угодно, шаг за шагом!",
@@ -1439,7 +1460,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Промпты ИИ",
     "all": "Все",
     "prompt": "Промпт",
-    "response": "Ответ"
+    "response": "Ответ",
+    "basedOn": "Основано на"
   },
   sl:   {
     "tagline": "Nauči se karkoli, korak za korakom.",
@@ -1504,7 +1526,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "UI pozivi",
     "all": "Vse",
     "prompt": "Poziv",
-    "response": "Odgovor"
+    "response": "Odgovor",
+    "basedOn": "Temelji na"
   },
   sr:   {
     "tagline": "Научи било шта, корак по корак.",
@@ -1569,7 +1592,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI упити",
     "all": "Све",
     "prompt": "Упит",
-    "response": "Одговор"
+    "response": "Одговор",
+    "basedOn": "Засновано на"
   },
   sv:   {
     "tagline": "Lär dig vad som helst, ett litet steg i taget.",
@@ -1634,7 +1658,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI-promptar",
     "all": "Alla",
     "prompt": "Prompt",
-    "response": "Svar"
+    "response": "Svar",
+    "basedOn": "Bygger på"
   },
   tr:   {
     "tagline": "Her şeyi, minik adımlarla öğren.",
@@ -1699,7 +1724,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "Yapay zekâ istemleri",
     "all": "Tümü",
     "prompt": "İstem",
-    "response": "Yanıt"
+    "response": "Yanıt",
+    "basedOn": "Temeli"
   },
   uk:   {
     "tagline": "Вивчай будь-що, маленькими кроками.",
@@ -1764,7 +1790,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "ШІ-запити",
     "all": "Усі",
     "prompt": "Запит",
-    "response": "Відповідь"
+    "response": "Відповідь",
+    "basedOn": "Ґрунтується на"
   },
   zh:   {
     "tagline": "一次一小步，轻松学会任何知识。",
@@ -1829,7 +1856,8 @@ const strings: Record<Lang, Record<StringKey, string>> = {
     "prompts": "AI 提示词",
     "all": "全部",
     "prompt": "提示词",
-    "response": "回答"
+    "response": "回答",
+    "basedOn": "基于"
   }
 };
 
