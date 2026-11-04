@@ -195,7 +195,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
         onPress={() => {
           void fbPromptAsync();
         }}
-        color="blue"
+        color="facebook"
         disabled={!fbReady || loading}
       />
     </Screen>

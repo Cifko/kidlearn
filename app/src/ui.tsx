@@ -60,13 +60,15 @@ export function Screen({
   );
 }
 
-type ButtonColor = 'green' | 'blue' | 'red' | 'gray';
+type ButtonColor = 'green' | 'blue' | 'red' | 'gray' | 'facebook';
 
 const buttonColors: Record<ButtonColor, { bg: string; edge: string }> = {
   green: { bg: colors.green, edge: colors.greenDark },
   blue: { bg: colors.blue, edge: colors.blueDark },
   red: { bg: colors.red, edge: colors.redDark },
   gray: { bg: colors.gray, edge: colors.grayDark },
+  // Official Facebook blue; the edge is our chunky shading, not branding.
+  facebook: { bg: '#1877F2', edge: '#1462C6' },
 };
 
 export function ChunkyButton({
@@ -75,12 +77,14 @@ export function ChunkyButton({
   color = 'green',
   disabled = false,
   loading = false,
+  icon,
 }: {
   title: string;
   onPress: () => void;
   color?: ButtonColor;
   disabled?: boolean;
   loading?: boolean;
+  icon?: ReactNode;
 }) {
   const scheme = disabled ? buttonColors.gray : buttonColors[color];
   return (
@@ -91,6 +95,11 @@ export function ChunkyButton({
     >
       {loading ? (
         <ActivityIndicator color="#FFFFFF" />
+      ) : icon ? (
+        <View style={styles.buttonContent}>
+          {icon}
+          <Text style={styles.buttonText}>{title}</Text>
+        </View>
       ) : (
         <Text style={styles.buttonText}>{title}</Text>
       )}
@@ -283,6 +292,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
   segmented: {
     flexDirection: 'row',
