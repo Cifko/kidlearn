@@ -13,6 +13,10 @@ WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '';
 const FB_APP_ID = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID ?? '';
+// Feature flag: set EXPO_PUBLIC_SHOW_EXTRA_LOGINS=false to hide the dev
+// and Google buttons (e.g. for demos). Facebook always stays. Defaults
+// to visible so local development is unchanged.
+const SHOW_EXTRA_LOGINS = process.env.EXPO_PUBLIC_SHOW_EXTRA_LOGINS !== 'false';
 
 // Facebook has no OIDC discovery document: static endpoints. The code is
 // exchanged server-side (the app secret never leaves the backend), so the
@@ -156,29 +160,33 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
       <Text style={styles.title}>KidLearn</Text>
       <Text style={styles.tagline}>{t('tagline')}</Text>
       {error && <ErrorBox message={error} />}
-      <View style={styles.gap}>
-        <ChunkyButton
-          title={t('devLogin')}
-          onPress={() => handleDevLogin()}
-          loading={loading}
-        />
-      </View>
-      <View style={styles.gap}>
-        <ChunkyButton
-          title={t('devLogin2')}
-          onPress={() => handleDevLogin('dev2')}
-          color="blue"
-          loading={loading}
-        />
-      </View>
-      <ChunkyButton
-        title={GOOGLE_CLIENT_ID ? t('googleLogin') : t('googleSoon')}
-        onPress={() => {
-          void promptAsync();
-        }}
-        color="blue"
-        disabled={!googleReady || loading}
-      />
+      {SHOW_EXTRA_LOGINS && (
+        <>
+          <View style={styles.gap}>
+            <ChunkyButton
+              title={t('devLogin')}
+              onPress={() => handleDevLogin()}
+              loading={loading}
+            />
+          </View>
+          <View style={styles.gap}>
+            <ChunkyButton
+              title={t('devLogin2')}
+              onPress={() => handleDevLogin('dev2')}
+              color="blue"
+              loading={loading}
+            />
+          </View>
+          <ChunkyButton
+            title={GOOGLE_CLIENT_ID ? t('googleLogin') : t('googleSoon')}
+            onPress={() => {
+              void promptAsync();
+            }}
+            color="blue"
+            disabled={!googleReady || loading}
+          />
+        </>
+      )}
       <View style={styles.gap} />
       <ChunkyButton
         title={FB_APP_ID ? t('facebookLogin') : t('facebookSoon')}
