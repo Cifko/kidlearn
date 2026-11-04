@@ -38,12 +38,17 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
     discovery,
   );
   // public_profile is granted by default; email is all we must ask for.
+  // No PKCE: the code is exchanged by the backend, which authenticates
+  // with the app secret instead. Leaving PKCE on makes Facebook bind
+  // the code to a challenge the backend never sends, and the exchange
+  // fails with "no code_verifier specified".
   const [fbRequest, fbResponse, fbPromptAsync] = AuthSession.useAuthRequest(
     {
       clientId: FB_APP_ID,
       scopes: ['email'],
       responseType: AuthSession.ResponseType.Code,
       redirectUri: AuthSession.makeRedirectUri(),
+      usePKCE: false,
     },
     FB_DISCOVERY,
   );
