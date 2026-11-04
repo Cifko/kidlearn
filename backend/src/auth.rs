@@ -217,10 +217,13 @@ async fn facebook_login(
         })?;
     if !exchange.status().is_success() {
         let status = exchange.status();
+        let sent_uri = input.redirect_uri.trim();
         let detail = exchange.text().await.unwrap_or_default();
         let detail = detail.chars().take(300).collect::<String>();
-        tracing::warn!(%status, %detail, "facebook token exchange failed");
-        return Ok(facebook_denied(&detail));
+        tracing::warn!(%status, %sent_uri, %detail, "facebook token exchange failed");
+        return Ok(facebook_denied(&format!(
+            "{detail} [redirect_uri sent: {sent_uri}]"
+        )));
     }
     let token: FacebookTokenResponse = exchange.json().await.map_err(|err| {
         tracing::warn!(%err, "facebook token response unreadable");

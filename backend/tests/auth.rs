@@ -405,6 +405,13 @@ async fn facebook_login_surfaces_graph_error_detail() {
             .contains("Error validating verification code"),
         "unexpected body: {body}",
     );
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("[redirect_uri sent: http://localhost:8081]"),
+        "unexpected body: {body}",
+    );
 }
 
 #[tokio::test]
