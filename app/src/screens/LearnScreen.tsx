@@ -16,6 +16,7 @@ import { Lang, useLang } from '../i18n';
 import { MathText, stripMathForMeasure } from '../math';
 import { Owl } from '../owl';
 import { PlotView } from '../plot';
+import { subjectBackgroundUri } from '../subjectBackground';
 import {
   matchingNarratorVoices,
   pickNarratorVoice,
@@ -29,35 +30,6 @@ import { ChunkyButton, ErrorBox, Screen } from '../ui';
 const HEARTS_PER_RUN = 3;
 // Owl width plus the gap beside the question text.
 const OWL_SPACE = 68;
-
-// Backgrounds are immutable (subjects never change title/description and
-// regenerations keep the cached bytes), so an in-memory LRU keyed by
-// subject is always fresh. One fetch per subject per session instead of
-// one per lesson.
-const BACKGROUND_CACHE_SIZE = 10;
-const backgroundCache = new Map<number, string>();
-
-function getCachedBackground(subjectId: number): string | null {
-  const uri = backgroundCache.get(subjectId);
-  if (uri === undefined) {
-    return null;
-  }
-  backgroundCache.delete(subjectId);
-  backgroundCache.set(subjectId, uri);
-  return uri;
-}
-
-function cacheBackground(subjectId: number, uri: string) {
-  backgroundCache.delete(subjectId);
-  backgroundCache.set(subjectId, uri);
-  while (backgroundCache.size > BACKGROUND_CACHE_SIZE) {
-    const oldest = backgroundCache.keys().next();
-    if (oldest.done) {
-      break;
-    }
-    backgroundCache.delete(oldest.value);
-  }
-}
 
 // Fisher-Yates; returns a shuffled copy. Generation emits options with
 // the correct answer first most of the time, so both the question order
@@ -119,20 +91,11 @@ export function LearnScreen({
     try {
       const data = await api.lesson(token, lessonId);
       // Decorative: loads alongside, never blocks or fails the lesson.
-      const cached = getCachedBackground(data.subject_id);
-      if (cached !== null) {
-        setBackgroundUri(cached);
-      } else if (data.background_url) {
-        const subjectId = data.subject_id;
-        const url = data.background_url;
-        api.assetImage(token, url).then(
-          (uri) => {
-            cacheBackground(subjectId, uri);
-            setBackgroundUri(uri);
-          },
-          () => {},
-        );
-      }
+      subjectBackgroundUri(token, data.subject_id).then((uri) => {
+        if (uri !== null) {
+          setBackgroundUri(uri);
+        }
+      });
       const urls = [
         ...new Set(
           data.questions.flatMap((q) => [

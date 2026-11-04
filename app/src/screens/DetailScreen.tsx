@@ -9,6 +9,7 @@ import {
 import { api, ApiError, SubjectDetail, LessonProgress, SubjectSummary } from '../api';
 import { useLang } from '../i18n';
 import { languageLabel } from '../languages';
+import { subjectBackgroundUri } from '../subjectBackground';
 import { colors } from '../theme';
 import { ChunkyButton, ErrorBox, Screen } from '../ui';
 
@@ -33,6 +34,7 @@ export function DetailScreen({
 }) {
   const { t } = useLang();
   const [detail, setDetail] = useState<SubjectDetail | null>(null);
+  const [backgroundUri, setBackgroundUri] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<number, LessonProgress>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -61,6 +63,12 @@ export function DetailScreen({
         ]);
         setDetail(data);
         setProgress(Object.fromEntries(prog.lessons.map((s) => [s.lesson_id, s])));
+        // Decorative: loads alongside, never blocks or fails the screen.
+        subjectBackgroundUri(token, subjectId).then((uri) => {
+          if (uri !== null) {
+            setBackgroundUri(uri);
+          }
+        });
       } catch (err) {
         setError(err instanceof ApiError ? err.message : 'Failed to load');
       } finally {
@@ -215,6 +223,7 @@ export function DetailScreen({
   return (
     <Screen
       scrollRef={scrollRef}
+      backgroundUri={backgroundUri}
       onViewportHeight={(height) => {
         viewportHeight.current = height;
         maybeScrollToFocus();
