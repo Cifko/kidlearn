@@ -22,9 +22,21 @@ const FB_DISCOVERY = {
   tokenEndpoint: 'https://graph.facebook.com/v22.0/oauth/access_token',
 };
 
+// Facebook binds the code to the dialog's redirect_uri with a trailing
+// slash enforced: exchanging the identical URI without one fails with
+// "Error validating verification code" (verified by hand against the
+// Graph API). Normalize once so the dialog, the derived value, and the
+// backend all use the slashed form. Query and fragment stay untouched.
+function withTrailingSlash(uri: string): string {
+  const cut = uri.search(/[?#]/);
+  const head = cut === -1 ? uri : uri.slice(0, cut);
+  const tail = cut === -1 ? '' : uri.slice(cut);
+  return (head.endsWith('/') ? head : `${head}/`) + tail;
+}
+
 // The backend's code exchange must repeat the dialog's redirect_uri
 // byte-for-byte. Derive it from the authorize URL expo actually opened,
-// so expo-side normalization (e.g. a trailing slash) can't skew it.
+// so expo-side normalization can't skew it.
 // Falls back to the request value when unparseable.
 async function dialogRedirectUri(request: AuthSession.AuthRequest): Promise<string> {
   try {
@@ -64,7 +76,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
       clientId: FB_APP_ID,
       scopes: ['email'],
       responseType: AuthSession.ResponseType.Code,
-      redirectUri: AuthSession.makeRedirectUri(),
+      redirectUri: withTrailingSlash(AuthSession.makeRedirectUri()),
       usePKCE: false,
     },
     FB_DISCOVERY,
