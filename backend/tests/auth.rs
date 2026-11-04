@@ -276,6 +276,19 @@ async fn mock_graph() -> (String, tokio::task::JoinHandle<()>) {
                             "token_type": "bearer",
                         }))
                         .into_response(),
+                        // Mirrors a real Graph denial (e.g. redirect_uri
+                        // mismatch): HTTP 400 with an OAuthException body.
+                        Some("denied") => (
+                            StatusCode::BAD_REQUEST,
+                            axum::Json(json!({
+                                "error": {
+                                    "message": "Error validating verification code.",
+                                    "type": "OAuthException",
+                                    "code": 100,
+                                }
+                            })),
+                        )
+                            .into_response(),
                         _ => StatusCode::BAD_REQUEST.into_response(),
                     }
                 },
@@ -377,6 +390,21 @@ async fn facebook_login_rejects_bad_code() {
     let app = facebook_app(&url).await;
     let (status, _) = facebook_login(&app, "bogus").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn facebook_login_surfaces_graph_error_detail() {
+    let (url, _server) = mock_graph().await;
+    let app = facebook_app(&url).await;
+    let (status, body) = facebook_login(&app, "denied").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Error validating verification code"),
+        "unexpected body: {body}",
+    );
 }
 
 #[tokio::test]

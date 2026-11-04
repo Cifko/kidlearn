@@ -2,7 +2,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
     extract::{FromRequestParts, State},
-    http::{header, request::Parts},
+    http::{header, request::Parts, StatusCode},
+    response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
@@ -180,7 +181,7 @@ struct FacebookUserInfo {
 async fn facebook_login(
     State(state): State<AppState>,
     Json(input): Json<FacebookLoginRequest>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Response, AppError> {
     let (app_id, app_secret) = match (
         state.config.facebook_app_id.clone(),
         state.config.facebook_app_secret.clone(),
@@ -199,7 +200,7 @@ async fn facebook_login(
         ));
     }
     let graph = state.config.facebook_graph_url.clone();
-    let token: FacebookTokenResponse = state
+    let exchange = state
         .http
         .get(format!("{graph}/oauth/access_token"))
         .query(&[
@@ -213,12 +214,18 @@ async fn facebook_login(
         .map_err(|err| {
             tracing::error!(%err, "facebook exchange unreachable");
             AppError::ServiceUnavailable(format!("Facebook unreachable: {err}"))
-        })?
-        .error_for_status()
-        .map_err(|_| AppError::Unauthorized)?
-        .json()
-        .await
-        .map_err(|_| AppError::Unauthorized)?;
+        })?;
+    if !exchange.status().is_success() {
+        let status = exchange.status();
+        let detail = exchange.text().await.unwrap_or_default();
+        let detail = detail.chars().take(300).collect::<String>();
+        tracing::warn!(%status, %detail, "facebook token exchange failed");
+        return Ok(facebook_denied(&detail));
+    }
+    let token: FacebookTokenResponse = exchange.json().await.map_err(|err| {
+        tracing::warn!(%err, "facebook token response unreadable");
+        AppError::Unauthorized
+    })?;
 
     // appsecret_proof binds the token to this app (Facebook's CSRF guard).
     let mut mac = Hmac::<Sha256>::new_from_slice(app_secret.as_bytes())
@@ -226,7 +233,7 @@ async fn facebook_login(
     mac.update(token.access_token.as_bytes());
     let proof = hex_encode(&mac.finalize().into_bytes());
 
-    let info: FacebookUserInfo = state
+    let me = state
         .http
         .get(format!("{graph}/me"))
         .query(&[
@@ -236,12 +243,15 @@ async fn facebook_login(
         ])
         .send()
         .await
-        .map_err(|_| AppError::Unauthorized)?
-        .error_for_status()
-        .map_err(|_| AppError::Unauthorized)?
-        .json()
-        .await
         .map_err(|_| AppError::Unauthorized)?;
+    if !me.status().is_success() {
+        let status = me.status();
+        let detail = me.text().await.unwrap_or_default();
+        let detail = detail.chars().take(300).collect::<String>();
+        tracing::warn!(%status, %detail, "facebook user lookup failed");
+        return Ok(facebook_denied(&detail));
+    }
+    let info: FacebookUserInfo = me.json().await.map_err(|_| AppError::Unauthorized)?;
     let email = info
         .email
         .ok_or_else(|| AppError::BadRequest("Facebook account has no email address".to_string()))?;
@@ -266,7 +276,20 @@ async fn facebook_login(
             .fetch_one(&state.db)
             .await?;
     tracing::info!(user_id = user.id, "facebook login");
-    Ok(issue_login(&state, &user))
+    Ok(issue_login(&state, &user).into_response())
+}
+
+/// 401 that carries Facebook's own denial text. A Graph error body holds
+/// no secrets (OAuthException message, type, code), and surfacing it
+/// turns "unauthorized" into an actionable setup hint (wrong secret,
+/// redirect_uri mismatch, ...). Empty bodies keep the bare message.
+fn facebook_denied(detail: &str) -> Response {
+    let message = if detail.trim().is_empty() {
+        "unauthorized".to_string()
+    } else {
+        format!("Facebook login failed: {detail}")
+    };
+    (StatusCode::UNAUTHORIZED, Json(json!({ "error": message }))).into_response()
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
