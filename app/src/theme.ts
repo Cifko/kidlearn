@@ -1,4 +1,6 @@
 export const colors = {
+  // Brand blue sampled from the owl logo body.
+  brand: '#0080A0',
   bg: '#FFFFFF',
   card: '#F7F7F7',
   border: '#E5E5E5',

@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 44,
     fontWeight: '900',
-    color: colors.green,
+    color: colors.brand,
     textAlign: 'center',
   },
   tagline: {
