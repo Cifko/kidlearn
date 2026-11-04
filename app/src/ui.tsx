@@ -266,14 +266,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     opacity: 0.45,
   },
-  // The bundled art is already faint, so it renders opaque; the AI
-  // subject backgrounds above stay dimmed to keep text readable.
+  // Dimmed like the AI subject backgrounds so vivid art stays subtle
+  // behind text. Tune this one number to taste.
   defaultBackground: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    opacity: 0.45,
   },
   content: {
     padding: 20,

@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import Logo from '../../assets/logo.png';
+import FLogo from '../../assets/f-logo.png';
 import { api, ApiError } from '../api';
 import { useLang } from '../i18n';
 import { colors } from '../theme';
@@ -197,6 +198,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
         }}
         color="facebook"
         disabled={!fbReady || loading}
+        icon={<Image source={FLogo} style={styles.providerLogo} resizeMode="contain" />}
       />
     </Screen>
   );
@@ -216,6 +218,12 @@ const styles = StyleSheet.create({
     height: 158,
     alignSelf: 'center',
     marginBottom: 12,
+  },
+  // 20px clears Meta's 16px digital minimum; the 10px button gap clears
+  // the 1/4-width clear-space rule.
+  providerLogo: {
+    width: 20,
+    height: 20,
   },
   title: {
     fontSize: 44,
