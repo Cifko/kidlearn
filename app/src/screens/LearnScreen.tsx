@@ -59,6 +59,20 @@ function cacheBackground(subjectId: number, uri: string) {
   }
 }
 
+// Fisher-Yates; returns a shuffled copy. Generation emits options with
+// the correct answer first most of the time, so both the question order
+// and every question's options are shuffled per run below. Answers
+// submit by question id + value and the server judges correctness, so
+// display order is purely presentational.
+function shuffled<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 export function LearnScreen({
   token,
   lessonId,
@@ -92,6 +106,8 @@ export function LearnScreen({
   const [hearts, setHearts] = useState(HEARTS_PER_RUN);
   const [finished, setFinished] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Bumped on every retry so a new run reshuffles questions and options.
+  const [runId, setRunId] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -177,6 +193,16 @@ export function LearnScreen({
     [],
   );
 
+  // Shuffled per run; each question keeps its own plot, figure and
+  // options (also shuffled). Server data in `lesson` stays untouched.
+  const questions = useMemo(
+    () =>
+      lesson == null
+        ? []
+        : shuffled(lesson.questions.map((q) => ({ ...q, options: shuffled(q.options) }))),
+    [lesson, runId],
+  );
+
   function resetRun() {
     setIndex(0);
     setPicked(null);
@@ -187,13 +213,14 @@ export function LearnScreen({
     setFinished(false);
     setFailed(false);
     setError(null);
+    setRunId((id) => id + 1);
   }
 
   async function pick(value: string) {
-    if (picked || checking || !lesson) {
+    const question = questions[index];
+    if (picked || checking || question === undefined) {
       return;
     }
-    const question = lesson.questions[index];
     const isText = question.options[0]?.text != null;
     setPicked(value);
     setChecking(true);
@@ -220,14 +247,11 @@ export function LearnScreen({
   }
 
   function next() {
-    if (!lesson) {
-      return;
-    }
     if (result && !result.correct && hearts <= 0) {
       setFailed(true);
       return;
     }
-    if (index + 1 >= lesson.questions.length) {
+    if (index + 1 >= questions.length) {
       setFinished(true);
     } else {
       setIndex((i) => i + 1);
@@ -236,16 +260,16 @@ export function LearnScreen({
     }
   }
 
-  const total = lesson?.questions.length ?? 0;
+  const total = questions.length;
   const progress = total === 0 ? 0 : (finished || failed ? total : index) / total;
   const over = finished || failed;
-  const current = lesson?.questions[index];
+  const current = questions[index];
   // The server guarantees one kind per question; the first option tells which.
   const isTextQuestion = current != null && current.options[0]?.text != null;
   const figureUrl = current?.image_url ?? null;
   const figure = figureUrl != null ? images[figureUrl] : undefined;
   const questionText =
-    !over && !loading && !error && lesson && total > 0 ? lesson.questions[index].text : null;
+    !over && !loading && !error && lesson && total > 0 ? questions[index].text : null;
   const speech = lesson ? resolveSpeechLanguage(lesson.language, lang) : null;
   // Primitives, so the effect below only re-runs when they really change.
   const ttsLang = speech?.tts ?? null;
@@ -393,7 +417,7 @@ export function LearnScreen({
             </TouchableOpacity>
             <View style={styles.questionBody}>
               <MathText
-                text={lesson.questions[index].text}
+                text={questions[index].text}
                 style={styles.question}
                 maxWidth={Math.min(Dimensions.get('window').width, 640) - 40 - OWL_SPACE}
               />
@@ -449,7 +473,7 @@ export function LearnScreen({
           )}
           {figure != null && <Image source={{ uri: figure }} style={styles.figureImage} />}
           <View style={styles.options}>
-            {lesson.questions[index].options.map((option, optionIndex) => {
+            {questions[index].options.map((option, optionIndex) => {
               const value = option.text ?? option.asset_key ?? '';
               const correctValue = isTextQuestion
                 ? result?.correct_text
