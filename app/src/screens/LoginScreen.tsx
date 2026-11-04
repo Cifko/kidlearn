@@ -22,6 +22,23 @@ const FB_DISCOVERY = {
   tokenEndpoint: 'https://graph.facebook.com/v22.0/oauth/access_token',
 };
 
+// The backend's code exchange must repeat the dialog's redirect_uri
+// byte-for-byte. Derive it from the authorize URL expo actually opened,
+// so expo-side normalization (e.g. a trailing slash) can't skew it.
+// Falls back to the request value when unparseable.
+async function dialogRedirectUri(request: AuthSession.AuthRequest): Promise<string> {
+  try {
+    const authUrl = await request.makeAuthUrlAsync(FB_DISCOVERY);
+    const match = authUrl.match(/[?&]redirect_uri=([^&]*)/);
+    if (match) {
+      return decodeURIComponent(match[1]);
+    }
+  } catch {
+    // fall through to the request value
+  }
+  return request.redirectUri;
+}
+
 export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => void }) {
   const { lang, setLang, t } = useLang();
   const [loading, setLoading] = useState(false);
@@ -80,15 +97,14 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
       return;
     }
     const code = fbResponse.params.code;
-    const redirectUri = fbRequest?.redirectUri;
-    if (typeof code !== 'string' || code.length === 0 || !redirectUri) {
+    if (typeof code !== 'string' || code.length === 0 || !fbRequest) {
       setError('Facebook login failed');
       return;
     }
     setLoading(true);
     setError(null);
-    api
-      .facebookLogin(code, redirectUri)
+    dialogRedirectUri(fbRequest)
+      .then((redirectUri) => api.facebookLogin(code, redirectUri))
       .then(({ token }) =>
         AsyncStorage.setItem('kidlearn.token', token).then(() => onLoggedIn(token)),
       )
