@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import Logo from '../../assets/logo.png';
 import { api, ApiError } from '../api';
 import { useLang } from '../i18n';
 import { colors } from '../theme';
@@ -157,6 +158,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: (token: string) => voi
           />
         </View>
       </View>
+      <Image source={Logo} style={styles.logo} resizeMode="contain" />
       <Text style={styles.title}>KidLearn</Text>
       <Text style={styles.tagline}>{t('tagline')}</Text>
       {error && <ErrorBox message={error} />}
@@ -208,6 +210,12 @@ const styles = StyleSheet.create({
   },
   langBox: {
     width: 200,
+  },
+  logo: {
+    width: 140,
+    height: 158,
+    alignSelf: 'center',
+    marginBottom: 12,
   },
   title: {
     fontSize: 44,

@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import DefaultBackground from '../assets/background.png';
 import { colors } from './theme';
 
 export function Screen({
@@ -28,10 +29,17 @@ export function Screen({
   return (
     <SafeAreaView style={[styles.safe, backgroundUri != null && styles.transparent]}>
       <StatusBar style="dark" />
-      {backgroundUri != null && (
+      {backgroundUri != null ? (
         <Image
           source={{ uri: backgroundUri }}
           style={styles.background}
+          resizeMode="cover"
+          pointerEvents="none"
+        />
+      ) : (
+        <Image
+          source={DefaultBackground}
+          style={styles.defaultBackground}
           resizeMode="cover"
           pointerEvents="none"
         />
@@ -248,6 +256,15 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     opacity: 0.45,
+  },
+  // The bundled art is already faint, so it renders opaque; the AI
+  // subject backgrounds above stay dimmed to keep text readable.
+  defaultBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   content: {
     padding: 20,
